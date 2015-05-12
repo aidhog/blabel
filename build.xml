@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="skolem" basedir="." default="dist">
+   <property name="name" value="skolem" />
+   <property name="src" value="src" />
+   <property name="version" value="" />
+   <property name="dist" value="dist" />
+	
+   <path id="classpath">
+      <fileset dir="lib">
+         <include name="*.jar" />
+      </fileset>
+   </path>
+	
+   <target name="prepare">
+      <tstamp />
+      <mkdir dir="bin" />
+      <mkdir dir="dist" />
+   </target>
+	
+   <target name="dist" depends="clean,prepare">
+      <javac destdir="bin" srcdir="src" includes="cl/uchile/**" source="1.6" target="1.6" debug="true" debuglevel="lines,source">
+         <classpath refid="classpath" />
+      </javac>
+
+      <jar jarfile="${dist}/${name}.jar" basedir="bin">
+         <manifest>
+            <attribute name="Main-Class" value="cl.uchile.dcc.skolem.cli.Main" />
+         </manifest>
+         <!-- put common dependancies lower -->
+      	 <zipfileset src="lib/guava-18.0.jar" />
+      	 <zipfileset src="lib/nxparser-1.2.3.jar" />
+         <zipfileset src="lib/commons-cli-1.1.jar" />
+      </jar>
+   </target>
+	
+   <target name="clean">
+      <delete dir="bin" />
+      <delete>
+         <fileset dir="dist">
+            <include name="*.jar" />
+         </fileset>
+      </delete>
+   </target>
+	
+</project>
