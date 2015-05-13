@@ -1,17 +1,11 @@
 package cl.uchile.dcc.skolem;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.logging.ConsoleHandler;
@@ -22,8 +16,6 @@ import java.util.logging.Logger;
 import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.NodeComparator;
-import org.semanticweb.yars.nx.Nodes;
-import org.semanticweb.yars.nx.parser.NxParser;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
@@ -36,11 +28,11 @@ import com.google.common.hash.Hashing;
  * @author Aidan
  *
  */
-public class GraphColouring implements Callable<TreeSet<Node[]>> {
+public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 	public static final Comparator<Node[]> TRIPLE_COMP = NodeComparator.NC;
 	public static final Comparator<TreeSet<Node[]>> GRAPH_COMP = new GraphComparator(NodeComparator.NC);
 
-	public static final Level LOG_LEVEL = Level.OFF;
+	public static final Level LOG_LEVEL = Level.INFO;
 	public static final Logger LOG = Logger.getLogger(GraphColouring.class.getName());
 	
 	private static final int PRIME = 37;
@@ -95,16 +87,23 @@ public class GraphColouring implements Callable<TreeSet<Node[]>> {
 		this.colourIters = colourIters;
 	}
 
-	public TreeSet<Node[]> getCanonicalGraph(){
+	public GraphResult getCanonicalGraph(){
 		return getCanonicalGraph(0);
+	}
+	
+	public GraphResult getCanonicalGraph(int i){
+		return getCanonicalGraph(hg.getHashFunction().hashInt(i));
 	}
 
 	/**
 	 * Used to distinguish isomorphic sub-graphs to
-	 * preserve "non-leanness" in final isomorphism
+	 * preserve "non-leanness" in final isomorphism.
+	 * 
+	 * Returns a graph and a hash code that uniquely
+	 * identifies that graph (including the mux).
 	 * @return
 	 */
-	public TreeSet<Node[]> getCanonicalGraph(int i){
+	public GraphResult getCanonicalGraph(HashCode mux){
 		if(!leaves.isEmpty()){
 			// any of the hash graphs in the first graph will do
 			Map.Entry<TreeSet<Node[]>,ArrayList<GraphColouring>> c = leaves.firstEntry();
@@ -113,46 +112,26 @@ public class GraphColouring implements Callable<TreeSet<Node[]>> {
 			// compute the hash of the entire graph
 			HashCode ghc = gc.hg.getGraphHash();
 			
-			// and of the integer
-			HashCode ihc = hg.getHashFunction().hashInt(i);
-			
 			// combine
 			ArrayList<HashCode> tup = new ArrayList<HashCode>(2);
 			tup.add(ghc);
-			tup.add(ihc);
+			tup.add(mux);
 			HashCode comb = Hashing.combineOrdered(tup);
 			
 			// clone the initial canonical graph
 			HashGraph clone = gc.hg.branch();
 			
 			// mux the combined hashcode
-			muxHash(clone, comb);
+			HashGraph.muxHash(clone, comb);
 			
 			// compute final graph
 			TreeSet<Node[]> labelled = GraphColouring.labelBlankNodes(clone);
 
-			return labelled;
+			// NOTE: the returned hash is not recomputed
+			// since it is already unique
+			return new GraphResult(labelled,clone,comb);
 		}
 		return null;
-	}
-	
-	/**
-	 * Hash all blank nodes with the mux and return the triples
-	 * @param mux
-	 * @return
-	 */
-	private static void muxHash(HashGraph hg, HashCode mux){
-		HashSet<Node> bnodes = new HashSet<Node>();
-		bnodes.addAll(hg.getBlankNodeHashes().keySet());
-
-		for(Node b:bnodes){
-			HashCode hc = hg.getHash(b);
-			ArrayList<HashCode> tup = new ArrayList<HashCode>(2);
-			tup.add(hc);
-			tup.add(mux);
-			HashCode comb = Hashing.combineOrdered(tup);
-			hg.getBlankNodeHashes().put(b, comb);
-		}
 	}
 
 	public void execute() throws InterruptedException, HashCollisionException{
@@ -619,49 +598,49 @@ public class GraphColouring implements Callable<TreeSet<Node[]>> {
 		return true;
 	}
 
-	public static void main(String[] args) throws IOException, InterruptedException, HashCollisionException{
-		String file = "test/simple3.nt";
+//	public static void main(String[] args) throws IOException, InterruptedException, HashCollisionException{
+//		String file = "test/simple3.nt";
+//
+//
+//		BufferedReader br = new BufferedReader(new FileReader(file));
+//		NxParser nxp = new NxParser(br);
+//
+//		HashFunction hf = Hashing.crc32();
+//
+//		HashGraph hg = new HashGraph(hf);
+//
+//		while(nxp.hasNext()){
+//			hg.addTriple(nxp.next());
+//		}
+//
+//		Collection<HashGraph> bnps = hg.blankNodePartition();
+//
+//		TreeMap<TreeSet<Node[]>,Integer> graphs = new TreeMap<TreeSet<Node[]>,Integer>(GraphColouring.GRAPH_COMP);
+//		for(HashGraph bnp:bnps){
+//			GraphColouring gc = new GraphColouring(bnp);
+//			gc.execute();
+//
+//			TreeSet<Node[]> cg = gc.getCanonicalGraph();
+//			Integer count = graphs.get(cg);
+//			if(count==null){
+//				graphs.put(cg,1);
+//			} else{
+//				graphs.put(cg,count+1);
+//				cg = gc.getCanonicalGraph(count);
+//			}
+//
+//			System.out.println("==============");
+//			for(Node[] triple: cg){
+//				System.out.println(Nodes.toN3(triple));
+//			}
+//
+//			System.out.println("==============");
+//		}
+//		br.close();
+//
+//	}
 
-
-		BufferedReader br = new BufferedReader(new FileReader(file));
-		NxParser nxp = new NxParser(br);
-
-		HashFunction hf = Hashing.crc32();
-
-		HashGraph hg = new HashGraph(hf);
-
-		while(nxp.hasNext()){
-			hg.addTriple(nxp.next());
-		}
-
-		Collection<HashGraph> bnps = hg.blankNodePartition();
-
-		TreeMap<TreeSet<Node[]>,Integer> graphs = new TreeMap<TreeSet<Node[]>,Integer>(GraphColouring.GRAPH_COMP);
-		for(HashGraph bnp:bnps){
-			GraphColouring gc = new GraphColouring(bnp);
-			gc.execute();
-
-			TreeSet<Node[]> cg = gc.getCanonicalGraph();
-			Integer count = graphs.get(cg);
-			if(count==null){
-				graphs.put(cg,1);
-			} else{
-				graphs.put(cg,count+1);
-				cg = gc.getCanonicalGraph(count);
-			}
-
-			System.out.println("==============");
-			for(Node[] triple: cg){
-				System.out.println(Nodes.toN3(triple));
-			}
-
-			System.out.println("==============");
-		}
-		br.close();
-
-	}
-
-	public TreeSet<Node[]> call() throws Exception {
+	public GraphResult call() throws Exception {
 		execute();
 		return getCanonicalGraph();
 	}
@@ -687,6 +666,36 @@ public class GraphColouring implements Callable<TreeSet<Node[]>> {
 
 		public int compare(HashCode o1, HashCode o2) {
 			return o1.toString().compareTo(o2.toString());
+		}
+	}
+	
+	/**
+	 * A pair with a hash and a graph.
+	 * 
+	 * @author Aidan
+	 *
+	 */
+	public static class GraphResult{
+		private TreeSet<Node[]> graph;
+		private HashCode hash;
+		private HashGraph hg;
+		
+		public GraphResult(TreeSet<Node[]> graph, HashGraph hg, HashCode hash){
+			this.graph = graph;
+			this.hg = hg;
+			this.hash = hash;
+		}
+		
+		public TreeSet<Node[]> getGraph(){
+			return graph;
+		}
+		
+		public HashGraph getHashGraph(){
+			return hg;
+		}
+		
+		public HashCode getHash(){
+			return hash;
 		}
 	}
 }

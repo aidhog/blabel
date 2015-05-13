@@ -3,6 +3,7 @@ package cl.uchile.dcc.skolem;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.TreeSet;
 
 import org.semanticweb.yars.nx.BNode;
@@ -149,6 +150,45 @@ public class HashGraph {
 			tup.add(b);
 			
 			b = Hashing.combineUnordered(tup); 
+		}
+		return b;
+	}
+	
+	/**
+	 * Hash all blank nodes with the mux and return the triples
+	 * @param mux
+	 * @return
+	 */
+	public static void muxHash(HashGraph hg, HashCode mux){
+		HashSet<Node> bnodes = new HashSet<Node>();
+		bnodes.addAll(hg.getBlankNodeHashes().keySet());
+
+		for(Node b:bnodes){
+			HashCode hc = hg.getHash(b);
+			ArrayList<HashCode> tup = new ArrayList<HashCode>(2);
+			tup.add(hc);
+			tup.add(mux);
+			HashCode comb = Hashing.combineOrdered(tup);
+			hg.getBlankNodeHashes().put(b, comb);
+		}
+	}
+	
+	public HashCode getGroundSubGraphHash(){
+		HashCode b = blankHash;
+		for(Node[] t: data){
+			if(!(t[0] instanceof BNode) && !(t[2] instanceof BNode)){
+				ArrayList<HashCode> tup = new ArrayList<HashCode>();
+				for(Node n:t){
+					tup.add(getHash(n));
+				}
+				HashCode o = Hashing.combineOrdered(tup);
+				
+				tup.clear();
+				tup.add(o);
+				tup.add(b);
+				
+				b = Hashing.combineUnordered(tup); 
+			}
 		}
 		return b;
 	}

@@ -3,6 +3,9 @@
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
+# Test folder
+test/
+
 # Package Files #
 # *.jar
 *.war
