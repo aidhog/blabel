@@ -26,6 +26,7 @@ import org.apache.commons.cli.ParseException;
 import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.Nodes;
+import org.semanticweb.yars.nx.parser.Callback;
 import org.semanticweb.yars.nx.parser.NxParser;
 import org.semanticweb.yars.util.CallbackNxBufferedWriter;
 import org.semanticweb.yars.util.FlyweightNodeIterator;
@@ -197,62 +198,81 @@ public class LabelRDFGraph {
 		Iterator<Node[]> iter = nxp;
 		iter = new FlyweightNodeIterator(FW,iter);
 		
-		// load the graph into memory
-		ArrayList<Node[]> stmts = new ArrayList<Node[]>();
-		boolean bnode = false;
-		while(iter.hasNext()){
-			Node[] triple = iter.next();
-			if(triple.length>=3){
-				stmts.add(new Node[]{triple[0], triple[1], triple[2]});
-				bnode = bnode | (triple[0] instanceof BNode) | (triple[2] instanceof BNode);
-			} else{
-				LOG.warning("Not a triple "+Nodes.toN3(triple));
-			}
-		}
-		LOG.info("Loaded "+stmts.size()+" triples");
-		
-		if(!bnode){
-			LOG.info("No bnodes ... buffering triple input to output");
-			for(Node[] triple:stmts){
-				cb.processStatement(triple);
-			}
-		} else{
-			// create a new labeler
-			CanonicalLabelling cl = new CanonicalLabelling(stmts,cla);
-			
-			try{
-				LOG.info("Running labelling ...");
-				CanonicalLabellingResult clr = cl.call();
-				LOG.info("... done.");
-				
-				LOG.info("Number of blank nodes: "+clr.getBnodeCount());
-				LOG.info("Number of partitions: "+clr.getPartitionCount());
-				LOG.info("Number of colour iterations: "+clr.getColourIterationCount());
-				LOG.info("Number of leafs: "+clr.getLeafCount());
-				LOG.info("Graph hash: "+clr.getHashGraph().getGraphHash());
-				
-				// the canonical labeling writes blank node using hashes w/o prefix
-				// this code adds the prefix and maps them to URIs or blank nodes
-				// as specified in the options
-				LOG.info("Writing output ...");
-				int written = 0;
-				TreeSet<Node[]> canonicalGraph = clr.getGraph();
-				GraphLabelIterator gli = new GraphLabelIterator(canonicalGraph.iterator(), prefix, writeBnode);
-				while(gli.hasNext()){
-					cb.processStatement(gli.next());
-					written ++;
-				}
-				LOG.info("... written "+written+" statements.");
-			} catch(Exception e){
-				LOG.severe(e.getMessage());
-				e.printStackTrace();
-			}
-			
-				
-		}
+		// does the main work
+		labelGraph(iter,cb,cla,prefix,writeBnode);
 		
 		LOG.info("Finished in "+(System.currentTimeMillis()-b4)+" ms");
 		br.close();
 		bw.close();
 	}
+	
+	/**
+	 * Labels the input graph and writes the result to the callback.
+	 * 
+	 * @param in - The input data in Nx format
+	 * @param out - The output data in Nx format
+	 * @param cla - The options for running the labelling
+	 * @param prefix - Any prefix to be prepended to the label (e.g., a skolem prefix)
+	 * @param writeBnode - Writes bnodes if true, otherwise writes URIs
+	 * 
+	 * @returns null if no blank nodes in graph, otherwise returns an object with the details of the colouring process (including, e.g., a unique hash) 
+	 */
+	public static final CanonicalLabellingResult labelGraph(Iterator<Node[]> in, Callback out, CanonicalLabellingArgs cla, String prefix, boolean writeBnode){
+		// load the graph into memory
+				ArrayList<Node[]> stmts = new ArrayList<Node[]>();
+				boolean bnode = false;
+				while(in.hasNext()){
+					Node[] triple = in.next();
+					if(triple.length>=3){
+						stmts.add(new Node[]{triple[0], triple[1], triple[2]});
+						bnode = bnode | (triple[0] instanceof BNode) | (triple[2] instanceof BNode);
+					} else{
+						LOG.warning("Not a triple "+Nodes.toN3(triple));
+					}
+				}
+				LOG.info("Loaded "+stmts.size()+" triples");
+				
+				CanonicalLabellingResult clr = null;
+				
+				if(!bnode){
+					LOG.info("No bnodes ... buffering triple input to output");
+					for(Node[] triple:stmts){
+						out.processStatement(triple);
+					}
+				} else{
+					// create a new labeler
+					CanonicalLabelling cl = new CanonicalLabelling(stmts,cla);
+					
+					try{
+						LOG.info("Running labelling ...");
+						clr = cl.call();
+						LOG.info("... done.");
+						
+						LOG.info("Number of blank nodes: "+clr.getBnodeCount());
+						LOG.info("Number of partitions: "+clr.getPartitionCount());
+						LOG.info("Number of colour iterations: "+clr.getColourIterationCount());
+						LOG.info("Number of leafs: "+clr.getLeafCount());
+						LOG.info("Graph hash: "+clr.getHashGraph().getGraphHash());
+						
+						// the canonical labeling writes blank node using hashes w/o prefix
+						// this code adds the prefix and maps them to URIs or blank nodes
+						// as specified in the options
+						LOG.info("Writing output ...");
+						int written = 0;
+						TreeSet<Node[]> canonicalGraph = clr.getGraph();
+						GraphLabelIterator gli = new GraphLabelIterator(canonicalGraph.iterator(), prefix, writeBnode);
+						while(gli.hasNext()){
+							out.processStatement(gli.next());
+							written ++;
+						}
+						LOG.info("... written "+written+" statements.");
+					} catch(Exception e){
+						LOG.severe(e.getMessage());
+						e.printStackTrace();
+					}
+						
+				}
+				return clr;
+	}
+	
 }
