@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem;
+package cl.uchile.dcc.blabel.label;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,6 +20,15 @@ import org.semanticweb.yars.nx.NodeComparator;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+
+import cl.uchile.dcc.blabel.label.util.GraphComparator;
+import cl.uchile.dcc.blabel.label.util.HashGraph;
+import cl.uchile.dcc.blabel.label.util.Leaves;
+import cl.uchile.dcc.blabel.label.util.MapArrayList;
+import cl.uchile.dcc.blabel.label.util.MapTreeSet;
+import cl.uchile.dcc.blabel.label.util.Orbits;
+import cl.uchile.dcc.blabel.label.util.Partition;
+import cl.uchile.dcc.blabel.label.util.RefinablePartition;
 
 /**
  * Class that does the main work. Runs colouring iterations and
@@ -267,7 +276,7 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 				
 				if(path.size()>0){
 					i = 0;
-					for(TreeSet<Node> ts: gc.rfp.rParts){
+					for(TreeSet<Node> ts: gc.rfp.getCurrentRefinement()){
 						for(Map.Entry<Node,Integer> d:index.entrySet()){
 							if(ts.contains(d.getKey())){
 								indexes.set(d.getValue(),i);

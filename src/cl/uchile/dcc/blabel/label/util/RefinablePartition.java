@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem;
+package cl.uchile.dcc.blabel.label.util;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,7 +23,7 @@ import com.google.common.hash.HashCode;
 public class RefinablePartition {
 //	HashMap<HashNode,TreeSet<HashNode>> partition;
 	
-	ArrayList<TreeSet<Node>> rParts = new ArrayList<TreeSet<Node>>();
+	private ArrayList<TreeSet<Node>> rParts = new ArrayList<TreeSet<Node>>();
 	
 	public RefinablePartition(Collection<? extends Node> nodes){
 		// stores an ordered partition called

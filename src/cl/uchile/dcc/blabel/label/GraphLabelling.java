@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem;
+package cl.uchile.dcc.blabel.label;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,9 +10,10 @@ import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.NodeComparator;
 
-import cl.uchile.dcc.skolem.CanonicalLabelling.CanonicalLabellingResult;
-import cl.uchile.dcc.skolem.GraphColouring.GraphResult;
-import cl.uchile.dcc.skolem.GraphColouring.HashCollisionException;
+import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.label.util.HashGraph;
+import cl.uchile.dcc.blabel.label.GraphColouring.GraphResult;
+import cl.uchile.dcc.blabel.label.GraphColouring.HashCollisionException;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
@@ -26,7 +27,7 @@ import com.google.common.hash.Hashing;
  * @author Aidan
  *
  */
-public class CanonicalLabelling implements Callable<CanonicalLabellingResult> {
+public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 	private final Collection<Node[]> data;
 	private final CanonicalLabellingArgs args;
 	
@@ -34,7 +35,7 @@ public class CanonicalLabelling implements Callable<CanonicalLabellingResult> {
 	 * Canonicalise graph with standard arguments.
 	 * @param data
 	 */
-	public CanonicalLabelling(Collection<Node[]> data){
+	public GraphLabelling(Collection<Node[]> data){
 		this(data, new CanonicalLabellingArgs());
 	}
 	
@@ -43,7 +44,7 @@ public class CanonicalLabelling implements Callable<CanonicalLabellingResult> {
 	 * @param data
 	 * @param cla
 	 */
-	public CanonicalLabelling(Collection<Node[]> data, CanonicalLabellingArgs cla){
+	public GraphLabelling(Collection<Node[]> data, CanonicalLabellingArgs cla){
 		this.data = data;
 		this.args = cla;
 	}

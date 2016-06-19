@@ -1,8 +1,8 @@
-package cl.uchile.dcc.skolem;
+package cl.uchile.dcc.blabel.label.util;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeSet;
 
 /**
  * A map that maintains an ordered set for duplicate keys rather than
@@ -12,20 +12,20 @@ import java.util.Map;
  *
  * @param <E>
  */
-public class MapArrayList<E,F> extends HashMap<E,ArrayList<F>>{
+public class MapTreeSet<E,F> extends HashMap<E,TreeSet<F>>{
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
 	
-	public MapArrayList(){
+	public MapTreeSet(){
 		super();
 	}
 	
 	/**
 	 * Will invert the map.
 	 */
-	public MapArrayList(Map<? extends F,? extends E> toInvert){
+	public MapTreeSet(Map<? extends F,? extends E> toInvert){
 		super();
 		for(Map.Entry<? extends F, ? extends E> e:toInvert.entrySet()){
 			add(e.getValue(),e.getKey());
@@ -33,9 +33,9 @@ public class MapArrayList<E,F> extends HashMap<E,ArrayList<F>>{
 	}
 	
 	public boolean add(E a, F b){
-		ArrayList<F> set = get(a);
+		TreeSet<F> set = get(a);
 		if(set == null){
-			set = new ArrayList<F>();
+			set = new TreeSet<F>();
 			put(a,set);
 		}
 		

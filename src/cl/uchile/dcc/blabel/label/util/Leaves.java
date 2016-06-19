@@ -1,10 +1,12 @@
-package cl.uchile.dcc.skolem;
+package cl.uchile.dcc.blabel.label.util;
 
 import java.util.ArrayList;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.semanticweb.yars.nx.Node;
+
+import cl.uchile.dcc.blabel.label.GraphColouring;
 
 public class Leaves extends TreeMap<TreeSet<Node[]>,ArrayList<GraphColouring>> {
 	/**

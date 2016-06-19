@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem.cli;
+package cl.uchile.dcc.blabel.cli;
 
 import java.lang.reflect.Method;
 
@@ -10,7 +10,7 @@ import java.lang.reflect.Method;
  */
 public class Main {
 	
-	private static final String PREFIX = "cl.uchile.dcc.skolem.cli.";
+	private static final String PREFIX = Main.class.getPackage().getName()+".";
 	private static final String USAGE = "usage: "+Main.class.getName();
 
 	/**
@@ -23,7 +23,7 @@ public class Main {
 				StringBuffer sb = new StringBuffer();
 				sb.append("missing <utility> arg where <utility> one of");
 				sb.append("\n\t"+LabelRDFGraph.class.getSimpleName()+": Run labelling over an RDF graph encoded as N-Triples");
-				sb.append("\n\t"+ComputeCanonicalGraphs.class.getSimpleName()+": [Testing] Compute the canonical graphs in a quads file");
+				sb.append("\n\t"+RunNQuadsTest.class.getSimpleName()+": [Testing] Compute the canonical graphs in a quads file");
 				sb.append("\n\t"+Control.class.getSimpleName()+": [Testing] Run a control experiment to time parsing a quads file");
 				sb.append("\n\t"+RunSyntheticEvaluation.class.getSimpleName()+": [Testing] Run synthetic benchmark");
 				

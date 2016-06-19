@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem.cli;
+package cl.uchile.dcc.blabel.cli;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -12,6 +12,9 @@ import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.TreeSet;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -31,16 +34,25 @@ import org.semanticweb.yars.nx.parser.NxParser;
 import org.semanticweb.yars.util.CallbackNxBufferedWriter;
 import org.semanticweb.yars.util.FlyweightNodeIterator;
 
-import cl.uchile.dcc.skolem.CanonicalLabelling;
-import cl.uchile.dcc.skolem.CanonicalLabelling.CanonicalLabellingArgs;
-import cl.uchile.dcc.skolem.CanonicalLabelling.CanonicalLabellingResult;
-import cl.uchile.dcc.skolem.GraphLabelIterator;
+import cl.uchile.dcc.blabel.label.GraphLabelling;
+import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingArgs;
+import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.label.util.GraphLabelIterator;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
 public class LabelRDFGraph {
-	static Logger LOG = Logger.getLogger(LabelRDFGraph.class.getSimpleName());
+	static final Logger LOG = Logger.getLogger(LabelRDFGraph.class.getSimpleName());
+	public static final Level LOG_LEVEL = Level.INFO;
+	static{
+		for(Handler h : LOG.getParent().getHandlers()){
+		    if(h instanceof ConsoleHandler){
+		        h.setLevel(LOG_LEVEL);
+		    }
+		} 
+		LOG.setLevel(LOG_LEVEL);
+	}
 
 	public static int FW = 100000;
 
@@ -241,7 +253,7 @@ public class LabelRDFGraph {
 			}
 		} else{
 			// create a new labeler
-			CanonicalLabelling cl = new CanonicalLabelling(stmts,cla);
+			GraphLabelling cl = new GraphLabelling(stmts,cla);
 
 			try{
 				LOG.info("Running labelling ...");

@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem.cli;
+package cl.uchile.dcc.blabel.cli;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;

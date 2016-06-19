@@ -24,7 +24,7 @@
 
       <jar jarfile="${dist}/${name}.jar" basedir="bin">
          <manifest>
-            <attribute name="Main-Class" value="cl.uchile.dcc.skolem.cli.Main" />
+            <attribute name="Main-Class" value="cl.uchile.dcc.blabel.cli.Main" />
          </manifest>
          <!-- put common dependancies lower -->
       	 <zipfileset src="lib/guava-18.0.jar" />

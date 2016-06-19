@@ -1,19 +1,18 @@
-package cl.uchile.dcc.skolem.cli;
+package cl.uchile.dcc.blabel.cli;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -30,12 +29,16 @@ import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.Resource;
 
-import cl.uchile.dcc.skolem.CanonicalLabelling;
-import cl.uchile.dcc.skolem.CanonicalLabelling.CanonicalLabellingArgs;
-import cl.uchile.dcc.skolem.CanonicalLabelling.CanonicalLabellingResult;
-
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+
+import cl.uchile.dcc.blabel.label.GraphLabelling;
+import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingArgs;
+import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
+import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
+import cl.uchile.dcc.blabel.lean.GraphLeaning;
+import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
 
 public class RunSyntheticEvaluation {
 	public static final Level LOG_LEVEL = Level.OFF;
@@ -47,16 +50,26 @@ public class RunSyntheticEvaluation {
 		    }
 		} 
 		LOG.setLevel(LOG_LEVEL);
-	}
-	
+	}	
 //	public static final String ZIP_LOC = "http://pallini.di.uniroma1.it/library/undirected_dim.zip";
 //	public static final String ZIP_FN = "undirected_dim.zip";
 	
 	public static final int BUFFER = 8*1024;
 	
-	public static final int TIMEOUT = 600; //in seconds
+	public static final int DEFAULT_TIMEOUT = 600; //in seconds
 	
 	public static final Resource PRED = new Resource("p");
+	
+	public static enum Benchmark { LEAN, LABEL, BOTH, CONTROL };
+	
+	public static String BENCHMARK_OPTIONS;
+	static{
+		StringBuilder sb = new StringBuilder();
+		for(Benchmark b: Benchmark.values()){
+			sb.append(b.toString()+":"+b.ordinal()+" ");
+		}
+		BENCHMARK_OPTIONS = sb.toString().trim();
+	}
 
 	public static void main(String[] args) throws IOException, InterruptedException{
 //		Option zO = new Option("z", "fetch zip (doesn't seem to work :/)");
@@ -69,8 +82,17 @@ public class RunSyntheticEvaluation {
 		Option sO = new Option("s", "hashing scheme: 0:md5 1:murmur3_128 2:sha1 3:sha256 4:sha512");
 		sO.setArgs(1);
 		
-		Option tO = new Option("t", "timeout for each test in seconds (default "+TIMEOUT+")");
+		Option lO = new Option("l", "leaning algorithm: 0:dfs 1:bfs");
+		lO.setArgs(1);
+		
+		Option rO = new Option("r", "randomise dfs search (don't guess best, select random)");
+		
+		Option tO = new Option("t", "timeout for each test in seconds (default "+DEFAULT_TIMEOUT+")");
 		tO.setArgs(1);
+		
+		Option bO = new Option("b", "benchmark to run: "+BENCHMARK_OPTIONS);
+		bO.setArgs(1);
+		bO.setRequired(true);
 
 		Option helpO = new Option("h", "print help");
 
@@ -78,7 +100,10 @@ public class RunSyntheticEvaluation {
 //		options.addOption(zO);
 		options.addOption(dO);
 		options.addOption(sO);
+		options.addOption(lO);
+		options.addOption(rO);
 		options.addOption(tO);
+		options.addOption(bO);
 		options.addOption(helpO);
 
 		CommandLineParser parser = new BasicParser();
@@ -99,6 +124,9 @@ public class RunSyntheticEvaluation {
 			formatter.printHelp("parameters:", options );
 			return;
 		}
+		
+		int benchId = Integer.parseInt(cmd.getOptionValue("b"));
+		Benchmark bench = Benchmark.values()[benchId]; 
 
 		String dir = cmd.getOptionValue("d");
 
@@ -107,20 +135,29 @@ public class RunSyntheticEvaluation {
 //			expandZip(fn);
 //		}
 		
-		int timeout = TIMEOUT;
+		int timeout = DEFAULT_TIMEOUT;
 		if(cmd.hasOption("t")){
 			timeout = Integer.parseInt(cmd.getOptionValue("t"));
 		}
 		
-		HashFunction hf = null;
+		boolean randomiseDfs = cmd.hasOption("r");
 		
-		int s = Integer.parseInt(cmd.getOptionValue("s"));
-		switch(s){
-			case 0: hf = Hashing.md5(); break;
-			case 1: hf = Hashing.murmur3_128(); break;
-			case 2: hf = Hashing.sha1(); break;
-			case 3: hf = Hashing.sha256(); break;
-			case 4: hf = Hashing.sha512(); break;
+		HashFunction hf = null;
+		int s = -1;
+		if(bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH)){
+			s = Integer.parseInt(cmd.getOptionValue("s"));
+			switch(s){
+				case 0: hf = Hashing.md5(); break;
+				case 1: hf = Hashing.murmur3_128(); break;
+				case 2: hf = Hashing.sha1(); break;
+				case 3: hf = Hashing.sha256(); break;
+				case 4: hf = Hashing.sha512(); break;
+			}
+		}
+		
+		int l = -1;
+		if(bench.equals(Benchmark.LEAN) || bench.equals(Benchmark.BOTH)){
+			l = Integer.parseInt(cmd.getOptionValue("l"));
 		}
 		
 		
@@ -135,61 +172,102 @@ public class RunSyntheticEvaluation {
 				
 				LOG.info("Running class "+testClass.getKey()+" for k="+classInstance.getKey());
 				LOG.info("Loading "+fn+" ...");
-				ArrayList<Node[]> data = loadAndConvert(fn);
+				Collection<Node[]> data = loadAndConvert(fn);
 				LOG.info("... loaded "+data.size()+" undirected triples.");
 				
-				CanonicalLabellingArgs cla = new CanonicalLabellingArgs();
-				cla.setHashFunction(hf);
+		        // in case test fails, we still want to
+				// have a bnode count
+				int bnodeCount = countBnodes(data);
 				
-				CanonicalLabelling cl = new CanonicalLabelling(data,cla);
+				LOG.info("... with "+bnodeCount+" blank nodes.");
 				
-				ExecutorService executor = Executors.newSingleThreadExecutor();
-		        Future<CanonicalLabellingResult> future = executor.submit(cl);
-		        
-		        // only needed if it fails for bnode count :(
-		        TreeSet<BNode> bnodes = new TreeSet<BNode>();
-				for(Node[] stmt : data){
-					for(Node n:stmt){
-						if(n instanceof BNode){
-							bnodes.add((BNode)n);
-						}
+				LOG.info("... running benchmark "+bench);
+				
+				
+				if(bench.equals(Benchmark.LEAN) || bench.equals(Benchmark.BOTH)){
+					GraphLeaning gl = null;
+					if(l==0){
+						LOG.info("Running DFS leaning algorithm, random: "+randomiseDfs);
+						gl = new DFSGraphLeaning(data,randomiseDfs);
+					} else if(l==1) {
+						LOG.info("Running BFS leaning algorithm");
+						gl = new BFSGraphLeaning(data);
+					} else {
+						LOG.info("Illegal value for parameter l:"+l);
+						HelpFormatter formatter = new HelpFormatter();
+						formatter.printHelp("parameters:", options );
+						return;
 					}
+					
+					ExecutorService executor = Executors.newSingleThreadExecutor();
+			        Future<GraphLeaningResult> future = executor.submit(gl);
+			        
+			        try {
+			        	long b4 = System.currentTimeMillis();
+			            LOG.info("Running leaning ...");
+			            GraphLeaningResult glr = future.get(timeout, TimeUnit.SECONDS);
+			            LOG.info("... finished!");
+			            
+			            int leanBnodeCount = countBnodes(glr.getLeanData());
+			            System.out.println("LEAN\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+glr.getLeanData().size()+"\t"+leanBnodeCount+"\t"+glr.getJoins()+"\t"+glr.getDepth()+"\t"+glr.getSolutionCount()+"\t"+(data.size()-glr.getLeanData().size())+"\t"+(bnodeCount-leanBnodeCount));
+			            
+			            if(bench.equals(Benchmark.BOTH)){
+			            	data = glr.getLeanData();
+				        	bnodeCount = leanBnodeCount;
+				        }
+			        } catch (Exception e) {
+			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
+			        	System.out.println("LEAN\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	
+			        	fail = true; // skip to next class
+			        } 
+			        executor.shutdownNow();
+			        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
 				}
 				
-		        try {
-		        	long b4 = System.currentTimeMillis();
-		            LOG.info("Running labelling ...");
-		            CanonicalLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
-		            LOG.info("... finished!");
-		            
-		            
-		            System.out.println(fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+(System.currentTimeMillis()-b4)+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());
-		        } catch (TimeoutException e) {
-		        	LOG.info("... timed out!");
-		        	System.out.println(fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodes.size()+"\t"+(-1*TIMEOUT*1000));//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
-		        	
-		        	fail = true; // skip to next class
-		        } catch (InterruptedException e) {
-		        	LOG.info("... interrupted!");
-		        	System.out.println(fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodes.size()+"\t"+(-1*TIMEOUT*1000));//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
-		        	e.printStackTrace();
-		        	
-		        	fail = true; // skip to next class
-				} catch (ExecutionException e) {
-					LOG.info("... execution failed!");
-					System.out.println(fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodes.size()+"\t"+(-1*TIMEOUT*1000));//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
-					e.printStackTrace();
+				if(!fail && (bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH))){
+					CanonicalLabellingArgs cla = new CanonicalLabellingArgs();
+					cla.setHashFunction(hf);
 					
-					fail = true; // skip to next class
+					GraphLabelling cl = new GraphLabelling(data,cla);
+					
+					ExecutorService executor = Executors.newSingleThreadExecutor();
+			        Future<CanonicalLabellingResult> future = executor.submit(cl);
+
+			        try {
+			        	long b4 = System.currentTimeMillis();
+			            LOG.info("Running labelling ...");
+			            CanonicalLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
+			            LOG.info("... finished!");
+			            
+			            System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+(System.currentTimeMillis()-b4)+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());
+			        } catch (Exception e) {
+			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
+			        	System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	
+			        	fail = true; // skip to next class
+			        } 
+			        executor.shutdownNow();
+			        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
 				}
-		        executor.shutdownNow();
-		        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
-		        
+				
 		        if(fail) break;
 			}
 			LOG.info("Finished class "+testClass.getKey());
 		}
 		LOG.info("Finished testcases. Results in standard out.");
+	}
+	
+	public static int countBnodes(Collection<Node[]> data){
+		HashSet<BNode> bnodes = new HashSet<BNode>();
+		for(Node[] stmt : data){
+			for(Node n:stmt){
+				if(n instanceof BNode){
+					bnodes.add((BNode)n);
+				}
+			}
+		}
+		return bnodes.size();
 	}
 	
 	private static ArrayList<Node[]> loadAndConvert(File fn) throws IOException{

@@ -1,4 +1,4 @@
-package cl.uchile.dcc.skolem;
+package cl.uchile.dcc.blabel.label.util;
 
 import java.util.Collection;
 import java.util.HashMap;
