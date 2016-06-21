@@ -41,7 +41,7 @@ import cl.uchile.dcc.blabel.lean.GraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
 
 public class RunSyntheticEvaluation {
-	public static final Level LOG_LEVEL = Level.OFF;
+	public static final Level LOG_LEVEL = Level.INFO;
 	public static final Logger LOG = Logger.getLogger(RunSyntheticEvaluation.class.getName());
 	static{
 		for(Handler h : LOG.getParent().getHandlers()){

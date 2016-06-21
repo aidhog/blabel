@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -28,21 +29,33 @@ import cl.uchile.dcc.blabel.lean.util.VariableSelectivityEstimate;
 
 public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 	protected final Collection<Node[]> data;
+	
+	// filtering trivial non-lean blank nodes
+	protected TreeSet<Node[]> filteredData;
 
+	// trivial non-lean bnode map
+	protected HashMap<BNode,Node> nlbnodeMap;
+	
 	// data where subject and object are bnodes
-	protected final Collection<Node[]> bnodeData;
+	protected Collection<Node[]> bnodeData;
 
 	// query bnodes (connected, non ground)
 	protected Set<BNode> queryBnodes;
 
 	public static final Logger LOG = Logger.getLogger(GraphLeaning.class.getName());
 
+	// maps node to all incoming and outgoing edges
+	protected Map<Node,NodeEdges> nodeToAllEdges;
+
+	// maps incoming/outgoing edges to node
+	protected Map<Edge,TreeSet<NodeEdges>> anyEdgeToNodes;
+	
 	// maps node to incoming and outgoing
 	// ground edges
-	protected Map<Node,NodeEdges> nodeToEdges;
+	protected Map<Node,NodeEdges> nodeToGroundEdges;
 
 	// maps incoming/outgoing ground edge to node
-	protected Map<Edge,TreeSet<NodeEdges>> edgeToNodes;
+	protected Map<Edge,TreeSet<NodeEdges>> groundEdgeToNodes;
 
 	// all blank nodes
 	protected TreeSet<BNode> bnodes;
@@ -100,63 +113,141 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 	}
 
 	private GraphLeaningResult lean() throws InterruptedException {
-		int prevGroundBnodes = 0;
-
+		// first we recursively remove all blank nodes where there
+		// is another term with a superset of (exact) edges
+		Collection<Node[]> inputData = data;
+		nlbnodeMap = new HashMap<BNode,Node>();
+		int prevNlbnodes = 0;
 		do{
+			// previous number of non lean bnodes
+			prevNlbnodes = nlbnodeMap.size();
+			
+			// index exact edges
+			indexAllEdges(inputData);
+			
+			if(bnodes.size()==0){
+				// if there are no blank nodes (remaining)
+				// we can return the lean graph
+				GraphLeaningResult glr = new GraphLeaningResult(inputData);
+				glr.setCoreMap(nlbnodeMap);
+				return glr;
+			}
+			
+			// removes blank nodes whose edges are a subset
+			// (or equal, if multiple) another term
+			filterTrivialNonLeanBnodes(inputData);
+			inputData = filteredData;
+		} while(prevNlbnodes!=nlbnodeMap.size());
+		
+		// afterwards, for the remaining blank nodes
+		// we will build a set of candidates based on
+		// ground information; at the same time, we
+		// will fix blank nodes with unique ground
+		// information.
+		int prevGroundBnodes = 0;
+		do{
+			// we will do this iteratively since fixing
+			// a blank node may lead to another blank node
+			// being fixed
 			prevGroundBnodes = fixedBnodes.size();
-			indexGroundEdges();
+			indexGroundEdges(filteredData);
 			findGroundCandidates();
 		} while(fixedBnodes.size()!=prevGroundBnodes);
-
+		
+		// this will be the witness homomorphism/mapping
+		HashMap<BNode,Node> coreMap = new HashMap<BNode,Node>();
+		if(!fixedBnodes.isEmpty()){
+			// we can create a map from fixed bnodes to 
+			// themselves to start with
+			for(BNode b:fixedBnodes){
+				coreMap.put(b, b);
+			}
+			
+			// we ignore the non-lean bnodes for the moment
+			// since we will work with the filtered data
+		}
+				
 		//fixedBnodes are like constants
 		if(fixedBnodes.size() == bnodes.size()){
-			// all bnodes have unique
-			// ground information ... nothing
-			// to lean
-			return new GraphLeaningResult(data);
+			// if all bnodes are fixed due to having unique
+			// ground information ... nothing to lean
+			
+			GraphLeaningResult glr = new GraphLeaningResult(filteredData);
+			glr.setCoreMap(coreMap);
+			if(!nlbnodeMap.isEmpty()){
+				// just add the non-lean blank nodes to the mapping
+				// if any and map bnodes to themselves
+				glr.coreMap.putAll(nlbnodeMap);
+				
+			}
+			return glr;
 		} 
-
+		
+		// all we are left to take care of now are the
+		// remaining connected blank nodes that are
+		// not fixed
 		indexBNodeGraph();
 
-
-		Map<BNode,Node> coreMap = null;
-		GraphLeaningResult glrConnected = null;
-		Collection<Node[]> currentData = this.data;
+		GraphLeaningResult glr = null; 
+//		glr.setCoreMap(coreMap);
+		
+		// we have connected blank nodes
 		if(!bnodeData.isEmpty()){
-			// we have connected blank nodes
+			// create a query (triples with connected non-fixed bnodes
+			// created by indexBnodeGraph())
 			ArrayList<Node[]> query = new ArrayList<Node[]>(bnodeData);
+			// and order by selectivity estimates
 			ArrayList<Node[]> orderedQuery = orderPatterns(query);
 
-			glrConnected = getCore(orderedQuery);
-			currentData = glrConnected.leanData;
-			coreMap = glrConnected.coreMap;
+			// now find a solution (e.g., using BFS or DFS) for
+			// the query against the filtered graph
+			GraphLeaningResult glrConnected = getCore(orderedQuery,coreMap);
 
-			if(coreMap==null){
+			if(glrConnected.coreMap==null){
 				// if there's no proper homomorphism
-				// map blank node to themselves
-				coreMap = new HashMap<BNode,Node>();
+				// filtered input is lean
+				glr = new GraphLeaningResult(filteredData);
+				
+				// map blank nodes to themselves
 				for(BNode qb:queryBnodes){
 					coreMap.put(qb, qb);
 				}
+				glr.setCoreMap(coreMap);
+			} else{
+				// otherwise we found a proper homomoprhism
+				// so let's map the data and set the mapping
+				glr = new GraphLeaningResult(glrConnected.leanData);
+				glr.setCoreMap(glrConnected.coreMap);
 			}
-		} 
 
-		if(queryBnodes.size()!=bnodes.size()){
-			// now we have to take care of unconnected bnodes
-			coreMap = getLeanCrossProduct(coreMap);
+			// add some other statistics
+			if(glrConnected!=null){
+				glr.joins = glrConnected.joins;
+				glr.depth = glrConnected.depth;
+				glr.solCount = glrConnected.solCount;
+			}
+		} else{
+			// actually we should have processed all unconnected
+			// bnodes by now ... so something is wrong
+			LOG.warning("No unconnected bnodes but some bnodes not fixed or non-lean?");
 		}
-
-		TreeSet<Node[]> leanData = mapData(currentData,coreMap);
-		GraphLeaningResult glr = new GraphLeaningResult(leanData);
-		if(leanData.size()!=data.size()){
-			glr.setCoreMap(coreMap);
+		
+		// we could ignore the trivial non-lean bnodes until now,
+		// but let's add them back in at the end
+		// to complete the witness mapping
+		if(!nlbnodeMap.isEmpty()){
+			if(glr.coreMap==null)
+				glr.coreMap = nlbnodeMap;
+			else{
+				glr.coreMap.putAll(nlbnodeMap);
+				// may need to compute the transitive closure again
+				// since if a maps to b in non-lean bnodes and b
+				// maps to c in connected homomorphism, we would like
+				// to map a to c
+				glr.coreMap = transitiveClosure(glr.coreMap);
+			}
 		}
-
-		if(glrConnected!=null){
-			glr.joins = glrConnected.joins;
-			glr.depth = glrConnected.depth;
-			glr.solCount = glrConnected.solCount;
-		}
+		
 		return glr;
 	}
 
@@ -185,87 +276,6 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return true;
 	}
 
-	private HashMap<BNode, Node> getLeanCrossProduct(Map<BNode,Node> coreMap) {
-		// non-connected blank nodes
-		// results are cross product of candidates
-		// need to find the solution with fewest blank nodes
-		HashMap<BNode,Node> cross = new HashMap<BNode,Node>();
-
-		// get the set of all bnodes used thus far in
-		// the solution
-		Set<BNode> bnodesUsed = new HashSet<BNode>();
-		if(coreMap!=null){
-			cross.putAll(coreMap);
-			for(Node n:coreMap.values()){
-				if(n instanceof BNode){
-					bnodesUsed.add((BNode)n);
-				}
-			}
-		}
-
-		// unconnected blank nodes with multiple candidates
-		HashSet<BNode> unconnectedBNodes = new HashSet<BNode>();
-		for(BNode b: bnodes){
-			if(!queryBnodes.contains(b)){
-				if(fixedBnodes.contains(b)){
-					bnodesUsed.add(b);
-					cross.put(b, b);
-				} else {
-					unconnectedBNodes.add(b);
-				}
-			}
-		}
-
-		// count the times used
-		Count<BNode> bnodes = new Count<BNode>();
-		for(BNode b:unconnectedBNodes){
-			Set<Node> bcands = candidates.get(b);
-			if(bcands==null || bcands.size()<=1){
-				LOG.warning(b+" not a non-trivial unconnected blank node, has candidates: "+candidates);
-			}
-			else {
-				for(Node n:bcands){
-					if(n instanceof BNode){
-						bnodes.add((BNode)n);
-					}
-				}
-			}
-		}
-
-		// try to first use a bnode that has been previously used
-		// ... otherwise select a most frequent one
-		for(BNode b:unconnectedBNodes){
-			Set<Node> bcands = candidates.get(b);
-			int max = 0;
-			BNode maxb = null;
-			for(Node n:bcands){
-				if(!(n instanceof BNode) || bnodesUsed.contains((BNode)n)){
-					// it doesn't matter what constant
-					// or previously used blank node
-					// we pick, it will get rid of the
-					// blank node that maps to it
-					cross.put(b, n);
-					maxb = null;
-					break;
-				} else{
-					// otherwise find most common
-					// blank node and map to that
-					BNode bv = (BNode)n;
-					int c = bnodes.get(bv);
-					if(c>max){
-						maxb = bv;
-						max = c;
-					}
-				}
-			}
-			if(maxb!=null){
-				cross.put(b, maxb);
-			}
-		}
-
-		return cross;
-	}
-
 	private static Node getMappedNode(Node n, Map<BNode,Node> homo){
 		if(n instanceof BNode){
 			Node m = homo.get((BNode)n);
@@ -284,10 +294,13 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		predCard = new Count<Node>();
 		posIndex = new HashMap<Node,Map<Node,Set<Node>>>();
 		psoIndex = new HashMap<Node,Map<Node,Set<Node>>>();
-
-		for(Node[] triple:data){
+		queryBnodes = new TreeSet<BNode>();
+		
+		for(Node[] triple:filteredData){
 			if(triple[0] instanceof BNode && !fixedBnodes.contains(triple[0]) && triple[2] instanceof BNode && !fixedBnodes.contains(triple[2])){
 				bnodeData.add(triple);
+				queryBnodes.add((BNode)triple[0]);
+				queryBnodes.add((BNode)triple[2]);
 			}
 
 			indexBNodeEdge(new Node[]{triple[1],triple[2],triple[0]},posIndex);
@@ -295,78 +308,232 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 			predCard.add(triple[1]);
 		}
 	}
-
-	private void indexGroundEdges(){
-		nodeToEdges = new HashMap<Node,NodeEdges>();
-		edgeToNodes = new HashMap<Edge,TreeSet<NodeEdges>>();
+	
+	private void filterTrivialNonLeanBnodes(Collection<Node[]> data){
+		// this stores blank nodes that have the same edge set
+		// only necessary to compute the mapping
+		HashMap<BNode,TreeSet<BNode>> partition = new HashMap<BNode,TreeSet<BNode>>();
 		
-		queryBnodes = new TreeSet<BNode>();
+		// we will map bnodes to the nodes that witness
+		// their non-leanness
+		HashMap<BNode,Node> map = new HashMap<BNode,Node>();
+		
+		for(BNode bnode:bnodes){
+			TreeSet<BNode> part = partition.get(bnode);
+			if(part!=null){
+				// we already found a blank node with an
+				// equal set of edges
+				continue;
+			}
+			
+			NodeEdges edges = nodeToAllEdges.get(bnode);
+			
+			if(edges!=null){
+				// find most selective edge
+				TreeSet<NodeEdges> min = null;
 
-		boolean first = bnodes == null || bnodes.isEmpty();
-		if(first)
-			bnodes = new TreeSet<BNode>();
+				for(Edge e: edges.getEdges()){
+					TreeSet<NodeEdges> ne = anyEdgeToNodes.get(e);
+					if(min == null || ne.size() < min.size()){
+						min = ne;
+					}
+					if(ne.size()==1){
+						// node can only be mapped to itself
+						break;
+					}
+				}
+
+				// nodes other than itself that has a superset of edges
+				if(min.size()!=1){
+					// check each to make sure
+					// blank node has subset of edges
+					for(NodeEdges ne: min){
+						if(!ne.getNode().equals(bnode)){
+							ArrayList<TreeSet<Edge>> diff = diff(edges.getEdges(),ne.getEdges());
+							if(diff.get(0).isEmpty()){
+								// has a subset of edges: ne covers edges
+								if(diff.get(1).isEmpty()){
+									// the sets are equal: ne equals edges
+									// if the node in question is
+									// IRI or seen blank node,
+									// current blank node is redundant
+									if(!(ne.getNode() instanceof BNode)){
+										map.put(bnode, ne.getNode());
+										break;
+									} else {
+										// node is a blank node, we add it
+										// to the partition of bnodes with
+										// equal edges
+										part = new TreeSet<BNode>();
+										part.add(bnode);
+										part.add((BNode)ne.getNode());
+										partition.put(bnode,part);
+										partition.put((BNode)ne.getNode(),part);
+									}
+										
+								} else {
+									// ne proper superset of edges
+									// current blank node is redundant
+									map.put(bnode, ne.getNode());
+									break;
+								}
+							}
+						}
+					}
+				} 
+			}
+		}
+		
+		// for all blank nodes with same edges
+		// chose first blank node to remain
+		// but only if not in nonLeanBnodes
+		// (the first will also be the first
+		// encountered above ... we have the same
+		// iteration order ... so we know it 
+		// will be mapped if possible)
+		for(TreeSet<BNode> parts:partition.values()){
+			BNode first = parts.pollFirst();
+			Node mapped = map.get(first);
+			if(mapped==null){
+				mapped = first;
+			}
+			
+			for(BNode rest : parts){
+				map.put(rest,mapped);
+			}
+		}
+		
+		// now we compute the transitive closure of the
+		// map to make sure we map to the final value
+		// and not one that is non lean
+		//
+		// note we should not have cycles since all bnodes
+		// with equal edges have been mapped to a single value
+		// (... if we have cycles, this will loop forever)
+		if(!map.isEmpty()){
+			nlbnodeMap.putAll(map);
+			nlbnodeMap = transitiveClosure(nlbnodeMap);
+		}
+		
+		bnodes.removeAll(nlbnodeMap.keySet());
+		filteredData = new TreeSet<Node[]>(NodeComparator.NC);
+		for(Node[] triple:data){
+			if((!(triple[0] instanceof BNode) || !nlbnodeMap.containsKey(triple[0])) && (!(triple[2] instanceof BNode) || !nlbnodeMap.containsKey(triple[2]))){
+				filteredData.add(triple);
+			}
+		}
+	}
+	
+	/**
+	 * If a maps to b and b maps to c, output will map a to c.
+	 * 
+	 * NOTE: ASSUMES NO CYCLES, OTHERWISE THIS WILL NOT TERMINATE CORRECTLY!!!!
+	 * 
+	 * @param map
+	 * @return
+	 */
+	private static HashMap<BNode,Node> transitiveClosure(HashMap<BNode,Node> map){
+		boolean changed;
+		int iters = 0;
+		do{
+			changed = false;
+			HashMap<BNode,Node> nextMap = new HashMap<BNode,Node>();
+			
+			for(Map.Entry<BNode, Node> m: map.entrySet()){
+				if(m.getValue() instanceof BNode){
+					BNode v = (BNode) m.getValue();
+					Node mv = map.get(v);
+					
+					if(mv!=null && !mv.equals(m.getValue())){
+						nextMap.put(m.getKey(), mv);
+						changed = true;
+						continue;
+					}
+				}
+				nextMap.put(m.getKey(),m.getValue());
+			}
+			map = nextMap;
+			
+			// without cycles, this should never happen
+			iters++;
+			if(iters>map.size()){
+				LOG.warning("Found a map with cycles!!! "+map);
+				return map;
+			}
+		} while(changed);
+		
+		return map;
+	}
+	
+	private void indexAllEdges(Collection<Node[]> data){
+		nodeToAllEdges = new HashMap<Node,NodeEdges>();
+		anyEdgeToNodes = new HashMap<Edge,TreeSet<NodeEdges>>();
+		
+		bnodes = new TreeSet<BNode>();
 
 		for(Node[] triple:data){
 			if(triple.length<3){
 				LOG.warning("Not a triple: "+Nodes.toN3(triple));
 			} else {
-				if(triple[0] instanceof BNode && !fixedBnodes.contains(triple[0])){
-					if(first)
-						bnodes.add((BNode) triple[0]);
-					if(triple[2] instanceof BNode && !fixedBnodes.contains(triple[2])){
-						queryBnodes.add((BNode)triple[0]);
-						queryBnodes.add((BNode)triple[2]);
-					}
-				} else{
-					Edge edge = new Edge(triple[1],triple[0],false);
-					indexGroundEdge(triple[2],edge);
-				}
-				// will be used to check blank nodes
-				// with unique set of predicates
-				Edge dummyOut = new Edge(triple[1],DUMMY,false);
-				indexGroundEdge(triple[2],dummyOut);
+				if(triple[0] instanceof BNode){
+					bnodes.add((BNode) triple[0]);
+				} 
+				
+				Edge inEdge = new Edge(triple[1],triple[0],false);
+				indexEdge(triple[2],inEdge,nodeToAllEdges,anyEdgeToNodes);
 
-
-				if(triple[2] instanceof BNode && !fixedBnodes.contains(triple[2])){
-					if(first)
-						bnodes.add((BNode) triple[2]);
-				} else{
-					Edge edge = new Edge(triple[1],triple[2],true);
-					indexGroundEdge(triple[0],edge);
+				if(triple[2] instanceof BNode){
+					bnodes.add((BNode) triple[2]);
 				}
-				Edge dummyIn = new Edge(triple[1],DUMMY,true);
-				indexGroundEdge(triple[0],dummyIn);
+				
+				Edge outEdge = new Edge(triple[1],triple[2],true);
+				indexEdge(triple[0],outEdge,nodeToAllEdges,anyEdgeToNodes);
 			}
 		}
 	}
 
-	/**
-	 * Find the nodes a blank node can potentially be mapped
-	 * to based on ground edge.
-	 * 
-	 * If a blank node can only be mapped to itself, add to 
-	 * fixedBnodes (i.e., if no other node has edges that
-	 * cover the blank node).
-	 * 
-	 * If a blank node has no ground edge, it will not appear
-	 * in candidates nor in fixedBnodes.
-	 */
+	private void indexGroundEdges(Collection<Node[]> data){
+		nodeToGroundEdges = new HashMap<Node,NodeEdges>();
+		groundEdgeToNodes = new HashMap<Edge,TreeSet<NodeEdges>>();
+		
+		for(Node[] triple: data){
+			if(triple.length<3){
+				LOG.warning("Not a triple: "+Nodes.toN3(triple));
+			} else {
+				if(!(triple[0] instanceof BNode && !fixedBnodes.contains(triple[0]))){
+					// term triple[0] is ground
+					Edge edge = new Edge(triple[1],triple[0],false);
+					indexEdge(triple[2],edge,nodeToGroundEdges,groundEdgeToNodes);
+				}
+				// will be used to check blank nodes
+				// with unique set of predicates
+				Edge dummyOut = new Edge(triple[1],DUMMY,false);
+				indexEdge(triple[2],dummyOut,nodeToGroundEdges,groundEdgeToNodes);
+
+
+				if(!(triple[2] instanceof BNode && !fixedBnodes.contains(triple[2]))){
+					// term triple[2] is ground
+					Edge edge = new Edge(triple[1],triple[2],true);
+					indexEdge(triple[0],edge,nodeToGroundEdges,groundEdgeToNodes);
+				}
+				Edge dummyIn = new Edge(triple[1],DUMMY,true);
+				indexEdge(triple[0],dummyIn,nodeToGroundEdges,groundEdgeToNodes);
+			}
+		}
+	}
+	
 	private void findGroundCandidates(){
-		//TODO if there's a large number of blank nodes
-		// with same edges, this will be quadratic :(
-		// could optimise by grouping on edge-set
-		// ... just a little complicated for this time
-		// of night
 		candidates = new HashMap<BNode,Set<Node>>();
+		
 		for(BNode bnode:bnodes){
 			if(!fixedBnodes.contains(bnode)){
-				NodeEdges edges = nodeToEdges.get(bnode);
+				NodeEdges edges = nodeToGroundEdges.get(bnode);
 				if(edges!=null){
 					// find most selective edge
 					TreeSet<NodeEdges> min = null;
 
 					for(Edge e: edges.getEdges()){
-						TreeSet<NodeEdges> ne = edgeToNodes.get(e);
+						TreeSet<NodeEdges> ne = groundEdgeToNodes.get(e);
 						if(min == null || ne.size() < min.size()){
 							min = ne;
 						}
@@ -384,7 +551,9 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 						// blank node has subset of edges
 						for(NodeEdges ne: min){
 							if(!ne.getNode().equals(bnode)){
-								if(ne.getEdges().containsAll(edges.getEdges())){
+								ArrayList<TreeSet<Edge>> diff = diff(edges.getEdges(),ne.getEdges());
+								if(diff.get(0).isEmpty()){
+									// all edges contained in ne
 									cans.add(ne.getNode());
 								}
 							}
@@ -401,6 +570,91 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 				}
 			}
 		}
+	}
+	
+	/**
+	 * Will return a list of two sets where the first set has the elements
+	 * of a not in b, and the second set has the elements of b not in a.
+	 * 
+	 * Assumes sorting is equal (and no dupes).
+	 * 
+	 * @param a
+	 * @param b
+	 * @return
+	 */
+	public static <E extends Comparable<? super E>> ArrayList<TreeSet<E>> diff(TreeSet<E> a, TreeSet<E> b){
+		ArrayList<TreeSet<E>> diff = new ArrayList<TreeSet<E>>();
+		diff.add(new TreeSet<E>());
+		diff.add(new TreeSet<E>());
+		
+		Iterator<E> aiter = a.iterator();
+		Iterator<E> biter = b.iterator();
+		
+		E anext = null;
+		E bnext = null;
+		
+		if(aiter.hasNext() && biter.hasNext()){
+			anext = aiter.next();
+			bnext = biter.next();
+
+			while(aiter.hasNext() && biter.hasNext()){
+				int comp = anext.compareTo(bnext);
+				
+				if(comp<0){
+					diff.get(0).add(anext);
+					anext = aiter.next();
+				} else if(comp>0){
+					diff.get(1).add(bnext);
+					bnext = biter.next();
+				} else{
+					anext = aiter.next();
+					bnext = biter.next();
+				}
+			}
+			
+			int comp = anext.compareTo(bnext);
+			
+			// we are at the end of one set
+			if(comp<0){
+				// if a is less, we can add a
+				diff.get(0).add(anext);
+				
+				// we may be able to add b if a
+				// is finished or a does not contain b later
+				if(!aiter.hasNext() || !a.contains(bnext))
+					diff.get(1).add(bnext);
+			} else if(comp>0){
+				// likewise swapping b and a
+				diff.get(1).add(bnext);
+				
+				if(!biter.hasNext() || !b.contains(anext))
+					diff.get(0).add(anext);
+			}
+		}
+		
+		// we need to add all the elements of the
+		// remaining set
+		if(aiter.hasNext()){
+			while(aiter.hasNext()){
+				diff.get(0).add(aiter.next());
+			}
+			// more efficient to try remove once
+			// than do linear checks
+			if(bnext!=null)
+				diff.get(0).remove(bnext);
+		}
+		
+		if(biter.hasNext()){
+			while(biter.hasNext()){
+				diff.get(1).add(biter.next());
+			}
+			// more efficient to try remove once
+			// than do linear checks
+			if(anext!=null)
+				diff.get(1).remove(anext);
+		}
+		
+		return diff;
 	}
 
 	protected Bindings getBindings(Node[] current, HashMap<BNode,Node> partialSol) throws InterruptedException{
@@ -527,20 +781,20 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return new Bindings(mask,bindings);
 	}
 
-	private void indexGroundEdge(Node n, Edge e){
-		NodeEdges edges = nodeToEdges.get(n);
+	private static void indexEdge(Node n, Edge e, Map<Node, NodeEdges> nodeToGroundEdges, Map<Edge, TreeSet<NodeEdges>> groundEdgeToNodes){
+		NodeEdges edges = nodeToGroundEdges.get(n);
 
 		if(edges==null){
 			edges = new NodeEdges(n);
-			nodeToEdges.put(n, edges);
+			nodeToGroundEdges.put(n, edges);
 		}
 
 		edges.addEdge(e);
 
-		TreeSet<NodeEdges> nodes = edgeToNodes.get(e);
+		TreeSet<NodeEdges> nodes = groundEdgeToNodes.get(e);
 		if(nodes==null){
 			nodes = new TreeSet<NodeEdges>();
-			edgeToNodes.put(e, nodes);
+			groundEdgeToNodes.put(e, nodes);
 		}
 		nodes.add(edges);
 	}
@@ -677,7 +931,7 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 	 * @return
 	 * @throws Exception 
 	 */
-	protected abstract GraphLeaningResult getCore(ArrayList<Node[]> query)  throws InterruptedException;
+	protected abstract GraphLeaningResult getCore(ArrayList<Node[]> query, HashMap<BNode, Node> coreMap)  throws InterruptedException;
 
 	public static HashSet<BNode> getBNodeBindings(HashMap<BNode, Node> partialSol) {
 		HashSet<BNode> bnodes = new HashSet<BNode>();
@@ -723,7 +977,7 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 
 	public static class GraphLeaningResult{
 		protected Collection<Node[]> leanData;
-		protected Map<BNode,Node> coreMap;
+		protected HashMap<BNode,Node> coreMap;
 		protected int joins;
 		protected int depth;
 		protected int solCount;
@@ -748,7 +1002,7 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 			return coreMap;
 		}
 
-		public void setCoreMap(Map<BNode, Node> coreMap) {
+		public void setCoreMap(HashMap<BNode, Node> coreMap) {
 			this.coreMap = coreMap;
 		}
 
@@ -776,4 +1030,22 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 			this.solCount = solCount;
 		}
 	}
+	
+//	public static void main(String[] args) throws Exception{
+//		TreeSet<String> a = new TreeSet<String>();
+////		a.add("a");
+//		a.add("f");
+////		a.add("d");
+//		a.add("a");
+//		TreeSet<String> b = new TreeSet<String>();
+//		b.add("e");
+//		b.add("k");
+//		b.add("d");
+//		b.add("f");
+//		b.add("b");
+//		
+//		ArrayList<TreeSet<String>> diff = diff(b,a);
+//		
+//		System.err.println(diff);
+//	}
 }

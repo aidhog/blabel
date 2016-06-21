@@ -30,8 +30,8 @@ public class BFSGraphLeaning extends GraphLeaning{
 	 * @throws InterruptedException 
 	 * @throws Exception 
 	 */
-	protected GraphLeaningResult getCore(ArrayList<Node[]> query) throws InterruptedException {
-		ArrayList<HashMap<BNode,Node>> solutions = getSolutions(query);
+	protected GraphLeaningResult getCore(ArrayList<Node[]> query, HashMap<BNode,Node> initialMap) throws InterruptedException {
+		ArrayList<HashMap<BNode,Node>> solutions = getSolutions(query,initialMap);
 		
 		int minCount = Integer.MAX_VALUE;
 		HashMap<BNode,Node> coreSolution = null;
@@ -46,7 +46,7 @@ public class BFSGraphLeaning extends GraphLeaning{
 			}
 		}
 		
-		Collection<Node[]> leanData = data;
+		Collection<Node[]> leanData = filteredData;
 		
 		if(coreSolution!=null){
 			leanData = mapData(leanData,coreSolution);
@@ -61,9 +61,11 @@ public class BFSGraphLeaning extends GraphLeaning{
 		return glr;
 	}
 	
-	private ArrayList<HashMap<BNode,Node>> getSolutions(ArrayList<Node[]> todo) throws InterruptedException{
+	private ArrayList<HashMap<BNode,Node>> getSolutions(ArrayList<Node[]> todo, HashMap<BNode, Node> initialMap) throws InterruptedException{
 		ArrayList<HashMap<BNode,Node>> solutions = new ArrayList<HashMap<BNode,Node>>();
-		solutions.add(new HashMap<BNode,Node>());
+		if(initialMap!=null)
+			solutions.add(initialMap);
+		else solutions.add(new HashMap<BNode,Node>());
 		ArrayList<Node[]> todoCopy = new ArrayList<Node[]>(todo);
 		return join(todoCopy,solutions);
 	}
@@ -136,7 +138,10 @@ public class BFSGraphLeaning extends GraphLeaning{
 	}
 		
 	public static void main(String[] args) throws Exception{
-		BufferedReader br = new BufferedReader(new FileReader("data/saramandai.nq"));
+		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/square.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/trivial-nonlean.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/saramandai.nq"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/timeout.nt"));
 		NxParser nxp = new NxParser(br);
 		
