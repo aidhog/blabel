@@ -35,8 +35,8 @@ import org.semanticweb.yars.util.CallbackNxBufferedWriter;
 import org.semanticweb.yars.util.FlyweightNodeIterator;
 
 import cl.uchile.dcc.blabel.label.GraphLabelling;
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingArgs;
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingArgs;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
 import cl.uchile.dcc.blabel.label.util.GraphLabelIterator;
 
 import com.google.common.hash.HashFunction;
@@ -75,7 +75,7 @@ public class LabelRDFGraph {
 
 		Option helpO = new Option("h", "print help");
 
-		Option sO = new Option("s", "hashing scheme: 0:md5 1:murmur3_128 2:sha1 3:sha256 4:sha512 (default "+CanonicalLabellingArgs.DEFAULT_HASHING.toString()+")");
+		Option sO = new Option("s", "hashing scheme: 0:md5 1:murmur3_128 2:sha1 3:sha256 4:sha512 (default "+GraphLabellingArgs.DEFAULT_HASHING.toString()+")");
 		sO.setArgs(1);
 
 		Option bO = new Option("b", "output labels as blank nodes");
@@ -198,7 +198,7 @@ public class LabelRDFGraph {
 
 		LOG.info("Starting process ...");
 		// set the arguments for the labelling
-		CanonicalLabellingArgs cla = new CanonicalLabellingArgs();
+		GraphLabellingArgs cla = new GraphLabellingArgs();
 		if(hf!=null)
 			cla.setHashFunction(hf);
 
@@ -229,7 +229,7 @@ public class LabelRDFGraph {
 	 * 
 	 * @returns null if no blank nodes in graph, otherwise returns an object with the details of the colouring process (including, e.g., a unique hash) 
 	 */
-	public static final CanonicalLabellingResult labelGraph(Iterator<Node[]> in, Callback out, CanonicalLabellingArgs cla, String prefix, boolean writeBnode){
+	public static final GraphLabellingResult labelGraph(Iterator<Node[]> in, Callback out, GraphLabellingArgs cla, String prefix, boolean writeBnode){
 		// load the graph into memory
 		ArrayList<Node[]> stmts = new ArrayList<Node[]>();
 		boolean bnode = false;
@@ -244,7 +244,7 @@ public class LabelRDFGraph {
 		}
 		LOG.info("Loaded "+stmts.size()+" triples");
 
-		CanonicalLabellingResult clr = null;
+		GraphLabellingResult clr = null;
 
 		if(!bnode){
 			LOG.info("No bnodes ... buffering triple input to output");

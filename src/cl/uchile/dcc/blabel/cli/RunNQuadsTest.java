@@ -41,8 +41,8 @@ import com.google.common.hash.Hashing;
 
 import cl.uchile.dcc.blabel.cli.RunSyntheticEvaluation.Benchmark;
 import cl.uchile.dcc.blabel.label.GraphLabelling;
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingArgs;
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingArgs;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
 import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning;
@@ -292,18 +292,18 @@ public class RunNQuadsTest {
 					}
 					
 					if(!fail && (bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH))){
-						CanonicalLabellingArgs cla = new CanonicalLabellingArgs();
+						GraphLabellingArgs cla = new GraphLabellingArgs();
 						cla.setHashFunction(hf);
 						
 						GraphLabelling cl = new GraphLabelling(data,cla);
 						
 						ExecutorService executor = Executors.newSingleThreadExecutor();
-				        Future<CanonicalLabellingResult> future = executor.submit(cl);
+				        Future<GraphLabellingResult> future = executor.submit(cl);
 
 				        try {
 				        	long b4l = System.currentTimeMillis();
 				            LOG.info("Running labelling ...");
-				            CanonicalLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
+				            GraphLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
 				            LOG.info("... finished!");
 				            
 				            long runtime = System.currentTimeMillis()-b4l;

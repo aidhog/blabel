@@ -33,8 +33,8 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
 import cl.uchile.dcc.blabel.label.GraphLabelling;
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingArgs;
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingArgs;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
 import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning;
@@ -226,18 +226,18 @@ public class RunSyntheticEvaluation {
 				}
 				
 				if(!fail && (bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH))){
-					CanonicalLabellingArgs cla = new CanonicalLabellingArgs();
+					GraphLabellingArgs cla = new GraphLabellingArgs();
 					cla.setHashFunction(hf);
 					
 					GraphLabelling cl = new GraphLabelling(data,cla);
 					
 					ExecutorService executor = Executors.newSingleThreadExecutor();
-			        Future<CanonicalLabellingResult> future = executor.submit(cl);
+			        Future<GraphLabellingResult> future = executor.submit(cl);
 
 			        try {
 			        	long b4 = System.currentTimeMillis();
 			            LOG.info("Running labelling ...");
-			            CanonicalLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
+			            GraphLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
 			            LOG.info("... finished!");
 			            
 			            System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+(System.currentTimeMillis()-b4)+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());

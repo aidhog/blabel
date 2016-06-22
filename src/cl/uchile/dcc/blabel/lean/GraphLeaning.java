@@ -251,7 +251,7 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return glr;
 	}
 
-	protected static TreeSet<Node[]> mapData(Collection<Node[]> data, Map<BNode,Node> map){
+	public static TreeSet<Node[]> mapData(Collection<Node[]> data, Map<BNode,Node> map){
 		TreeSet<Node[]> leanData = new TreeSet<Node[]>(NodeComparator.NC);
 		boolean identity = isIdentityMap(map);
 		for(Node[] triple:data){

@@ -60,6 +60,7 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 
 	final HashGraph hg;
 	boolean ran = false;
+	boolean prune = false;
 	MapTreeSet<HashCode,Node> part;
 	ArrayList<Node> path;
 	Leaves leaves = null; 
@@ -73,10 +74,22 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 	 * @param hg
 	 */
 	public GraphColouring(HashGraph hg){
-		this(hg,new ArrayList<Node>(),new Leaves(), new ArrayList<Integer>());
+		this(hg,true);
+	}
+	
+	/**
+	 * Will colour a HashGraph once run() is called.
+	 * 
+	 * If prune is false, will not prune by automorphisms
+	 * (default: true, ONLY SET TO false FOR TESTING)
+	 * 
+	 * @param hg
+	 */
+	public GraphColouring(HashGraph hg, boolean prune){
+		this(hg,new ArrayList<Node>(),new Leaves(), new ArrayList<Integer>(),prune);
 	}
 
-	private GraphColouring(HashGraph hg, ArrayList<Node> path, Leaves leaves, ArrayList<Integer> colourIters){
+	private GraphColouring(HashGraph hg, ArrayList<Node> path, Leaves leaves, ArrayList<Integer> colourIters, boolean prune){
 		// the hashgraph contains the graph
 		// and will be cloned when program
 		// branches
@@ -86,13 +99,17 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 		// local to this object
 		this.path = path;
 		
+		// prune by automorphisms
+		// or not
+		this.prune = prune;
+		
 		//leaves collected and shared
 		// across all branches
 		this.leaves = leaves;
 		
 		// the number of colouring iterations
-				// run at each step, shared across all
-				// branches
+		// run at each step, shared across all
+		// branches
 		this.colourIters = colourIters;
 	}
 
@@ -175,7 +192,7 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 					
 					
 					// check to see if we can skip due to discovered automorphisms					
-					if(visited.size()>0){
+					if(visited.size()>0 && prune){
 						// if we have already checked a sibling
 						if(orbits==null){
 							// create new cache of orbits for this path
@@ -217,7 +234,7 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 					LOG.fine("Branching from "+this.path+" to "+nextPath);
 
 					// re-run colouring / branch
-					GraphColouring gc = new GraphColouring(clone,nextPath,leaves,colourIters);
+					GraphColouring gc = new GraphColouring(clone,nextPath,leaves,colourIters,prune);
 					gc.execute();
 
 					visited.add(n);
@@ -235,7 +252,7 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 	 * to another sibling previously visited.
 	 * 
 	 * Orbits from a previous run with the same root can be considered as
-	 * an optimisation. If a pruning ornit cannot be found, the orbits will be
+	 * an optimisation. If a pruning orbit cannot be found, the orbits will be
 	 * extended until a pruning step can be found or all orbits are exhaused
 	 * for the current leaf graphs and root.
 	 * 
@@ -246,8 +263,12 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 		if(visited==null || visited.size()==0)
 			return false;
 		
+		// these orbits are only for the current level!!
+		// hence they are rooted in the path to this point
 		TreeSet<Node> orbits = o.getNonTrivialOrbit(next);
 		if(orbits!=null && orbits.size()>0){
+			// if any visited node can be mapped to next
+			// no need to visit next
 			for(Node v:visited){
 				if(orbits.contains(v)){
 					return true;
@@ -255,6 +276,9 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 			}
 		}
 		
+		// if we don't find an orbit cached, we should see if new
+		// automorphisms create one
+		//
 		// first build a map of nodes to their index in the path
 		HashMap<Node,Integer> index = new HashMap<Node,Integer>();
 		int i = 0;
@@ -265,17 +289,34 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 		
 		// gonna map index of path nodes to a colouring
 		// once another colouring is found with same indexes, create the
-		// isomorphism and add it to an orbit
+		// automorphism and add it to an orbit
 		for(Map.Entry<TreeSet<Node[]>,ArrayList<GraphColouring>> iso:leaves.entrySet()){
 			HashMap<ArrayList<Integer>,GraphColouring> rooted = new HashMap<ArrayList<Integer>,GraphColouring>();
+			
+			// for all the final colourings that produce the
+			// same RDF graph
 			for(GraphColouring gc:iso.getValue()){
+				// we will get the indexes of the current path nodes 
+				// in the refined partition of that final colouring
+				//
+				// nodes with the same indexes in different colourings
+				// (with same graph) are mapped by an automorphism
+				//
+				// we are only interested in rooted automorphisms that
+				// are the identity on the path so far: hence indexes
+				// need to correspond on path nodes!
 				ArrayList<Integer> indexes = new ArrayList<Integer>(index.size());
 				for(int j=0; j<index.size(); j++){
 					indexes.add(-1);
 				}
 				
 				if(path.size()>0){
+					// we are only interested in the nodes with
+					// index up to the depth of path we are currently at
 					i = 0;
+					
+					// get indexes of path nodes in refined partition
+					// of this final colouring
 					for(TreeSet<Node> ts: gc.rfp.getCurrentRefinement()){
 						for(Map.Entry<Node,Integer> d:index.entrySet()){
 							if(ts.contains(d.getKey())){
@@ -285,15 +326,23 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 						}
 						i++;
 					}
-				} // else everything mapped against empty list :)
+				} // if path is empty 
+				// everything mapped against empty list :)
+				// i.e., all automorphisms considered
 				
 				GraphColouring gce = rooted.get(indexes);
 				if(gce==null){
+					// only store one automorphism
+					// pairs will be composed!!
 					rooted.put(indexes,gc);
 				} else{
 					o.addAndCompose(RefinablePartition.getMapping(gce.rfp, gc.rfp));
+					
+					// this orbit will be fixed for the path
 					TreeSet<Node> orbit = o.getNonTrivialOrbit(next);
 					if(orbit!=null && orbit.size()>0){
+						// if any visited node can be mapped to next
+						// no need to visit next
 						for(Node v:visited){
 							if(orbit.contains(v)){
 								return true;

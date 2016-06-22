@@ -10,7 +10,7 @@ import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.NodeComparator;
 
-import cl.uchile.dcc.blabel.label.GraphLabelling.CanonicalLabellingResult;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
 import cl.uchile.dcc.blabel.label.util.HashGraph;
 import cl.uchile.dcc.blabel.label.GraphColouring.GraphResult;
 import cl.uchile.dcc.blabel.label.GraphColouring.HashCollisionException;
@@ -27,16 +27,16 @@ import com.google.common.hash.Hashing;
  * @author Aidan
  *
  */
-public class GraphLabelling implements Callable<CanonicalLabellingResult> {
+public class GraphLabelling implements Callable<GraphLabellingResult> {
 	private final Collection<Node[]> data;
-	private final CanonicalLabellingArgs args;
+	private final GraphLabellingArgs args;
 	
 	/** 
 	 * Canonicalise graph with standard arguments.
 	 * @param data
 	 */
 	public GraphLabelling(Collection<Node[]> data){
-		this(data, new CanonicalLabellingArgs());
+		this(data, new GraphLabellingArgs());
 	}
 	
 	/**
@@ -44,7 +44,7 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 	 * @param data
 	 * @param cla
 	 */
-	public GraphLabelling(Collection<Node[]> data, CanonicalLabellingArgs cla){
+	public GraphLabelling(Collection<Node[]> data, GraphLabellingArgs cla){
 		this.data = data;
 		this.args = cla;
 	}
@@ -53,7 +53,7 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 	 * The main execute method. Runs the canonical labelling according to the data
 	 * and args provided. Spits out a result with a canonical graph.
 	 */
-	public CanonicalLabellingResult call() throws InterruptedException, HashCollisionException{
+	public GraphLabellingResult call() throws InterruptedException, HashCollisionException{
 		// first hash the graph
 		HashGraph hg = new HashGraph(args.getHashFunction());
 		for(Node[] stmt : data){
@@ -76,7 +76,7 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 		// the results afterwards
 		for(HashGraph bnp:bnps){
 			// run the colouring for each partition
-			GraphColouring gc = new GraphColouring(bnp);
+			GraphColouring gc = new GraphColouring(bnp,args.prune);
 			gc.execute();
 			
 			// get the canonical graph for the partition
@@ -152,7 +152,7 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 		
 		
 		// fill the data and stats into the result object
-		CanonicalLabellingResult clr = new CanonicalLabellingResult();
+		GraphLabellingResult clr = new GraphLabellingResult();
 		clr.setGraph(fullGraph);
 		clr.setBnodeCount(hg.getBlankNodeHashes().size());
 		clr.setPartitionCount(bnps.size());
@@ -164,10 +164,11 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 		return clr;
 	}
 	
-	public static class CanonicalLabellingArgs{
+	public static class GraphLabellingArgs{
 		public static HashFunction DEFAULT_HASHING = Hashing.md5();
 		public static boolean DISTINGUISH_ISO_PARTITIONS = true;
 		public static boolean UNIQUE_PER_GRAPH = true;
+		public static boolean DEFAULT_PRUNE = true;
 		
 		// the hashing function to use
 		private HashFunction hf = DEFAULT_HASHING;
@@ -180,7 +181,12 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 		// if true, mux with a graph level hash
 		private boolean upg = UNIQUE_PER_GRAPH;
 		
-		public CanonicalLabellingArgs(){
+		// if false, do not prune by automorphisms
+		// if true, prune by automorphisms
+		// NOTE: should be true unless testing!
+		private boolean prune = DEFAULT_PRUNE;
+		
+		public GraphLabellingArgs(){
 			
 		}
 		
@@ -259,9 +265,17 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 		public boolean getUniquePerGraph(){
 			return upg;
 		}
+
+		public boolean isPrune() {
+			return prune;
+		}
+
+		public void setPrune(boolean prune) {
+			this.prune = prune;
+		}
 	}
 	
-	public static class CanonicalLabellingResult{
+	public static class GraphLabellingResult{
 
 		private TreeSet<Node[]> graph;
 		private int bnodeCount;
@@ -271,7 +285,7 @@ public class GraphLabelling implements Callable<CanonicalLabellingResult> {
 		private HashGraph hashGraph;
 		private HashCode gHash;
 		
-		private CanonicalLabellingResult(){
+		private GraphLabellingResult(){
 			;
 		}
 		
