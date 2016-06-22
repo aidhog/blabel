@@ -265,9 +265,8 @@ public class RunNQuadsTest {
 						
 						ExecutorService executor = Executors.newSingleThreadExecutor();
 				        Future<GraphLeaningResult> future = executor.submit(gl);
-				        
+				        long b4l = System.currentTimeMillis();
 				        try {
-				        	long b4l = System.currentTimeMillis();
 				            LOG.info("Running leaning ...");
 				            GraphLeaningResult glr = future.get(timeout, TimeUnit.SECONDS);
 				            LOG.info("... finished!");
@@ -275,14 +274,14 @@ public class RunNQuadsTest {
 				            int leanBnodeCount = RunSyntheticEvaluation.countBnodes(glr.getLeanData());
 				            long runtime = System.currentTimeMillis()-b4l;
 				            duration += runtime;
-				            System.out.println("LEAN\t"+old+"\t"+"\t"+data.size()+"\t"+bnodeCount+"\t"+runtime+"\t"+glr.getLeanData().size()+"\t"+leanBnodeCount+"\t"+glr.getJoins()+"\t"+glr.getDepth()+"\t"+glr.getSolutionCount()+"\t"+(data.size()-glr.getLeanData().size())+"\t"+(bnodeCount-leanBnodeCount));
+				            System.out.println("LEAN\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+runtime+"\t"+glr.getLeanData().size()+"\t"+leanBnodeCount+"\t"+glr.getJoins()+"\t"+glr.getDepth()+"\t"+glr.getSolutionCount()+"\t"+(data.size()-glr.getLeanData().size())+"\t"+(bnodeCount-leanBnodeCount));
 				            
 				            if(bench.equals(Benchmark.BOTH)){
 				            	data = glr.getLeanData();
 					        	bnodeCount = leanBnodeCount;
 					        }
 				        } catch (Exception e) {
-				        	System.out.println("LEAN\t"+old+"\t"+"\t"+data.size()+"\t"+bnodeCount+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+				        	System.out.println("LEAN\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 				        	LOG.warning(e.getClass().getName()+": "+e.getMessage());
 				        	
 				        	fail = true;
@@ -300,15 +299,15 @@ public class RunNQuadsTest {
 						ExecutorService executor = Executors.newSingleThreadExecutor();
 				        Future<GraphLabellingResult> future = executor.submit(cl);
 
+				        long b4l = System.currentTimeMillis();
 				        try {
-				        	long b4l = System.currentTimeMillis();
 				            LOG.info("Running labelling ...");
 				            GraphLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
 				            LOG.info("... finished!");
 				            
 				            long runtime = System.currentTimeMillis()-b4l;
 				            duration += runtime;
-				            System.out.println("LABEL\t"+old+"\t"+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+runtime+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());
+				            System.out.println("LABEL\t"+old+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+runtime+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());
 				            
 				            if(countDupes){
 				            	HashCode hc = clr.getUniqueGraphHash();
@@ -320,7 +319,7 @@ public class RunNQuadsTest {
 					        	dupes.add(old);
 					        }
 				        } catch (Exception e) {
-				        	System.out.println("LABEL\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+				        	System.out.println("LABEL\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 				        	LOG.warning(e.getClass().getName()+": "+e.getMessage());
 				        	
 				        	fail = true; // skip to next class

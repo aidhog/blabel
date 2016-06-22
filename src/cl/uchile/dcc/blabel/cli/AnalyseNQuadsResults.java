@@ -178,11 +178,11 @@ public class AnalyseNQuadsResults {
 						maxBnodesTriples = triples;
 					}
 
-					boolean error = split.length < 7;
+					boolean error = split.length < 8;
 
 					if(error){
 						if(lean){
-							exceptionTypeLean.add(split[5]);
+							exceptionTypeLean.add(split[split.length-1]);
 							leanErrorCount++;
 							errorLeanTime += Math.abs(runtime);
 							totalLeanErrorTriples += triples;
@@ -190,7 +190,7 @@ public class AnalyseNQuadsResults {
 
 						}
 						if(label){
-							exceptionTypeLabel.add(split[5]);
+							exceptionTypeLabel.add(split[split.length-1]);
 							labelErrorCount++;
 							errorLabelTime += Math.abs(runtime);
 							totalLabelErrorTriples += triples;

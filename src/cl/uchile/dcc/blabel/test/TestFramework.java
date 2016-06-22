@@ -34,9 +34,9 @@ import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
-import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkResults;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkResult;
 
-public class TestFramework implements Callable<TestFrameworkResults> {
+public class TestFramework implements Callable<TestFrameworkResult> {
 	static final Logger LOG = Logger.getLogger(TestFramework.class);
 	
 	private final TestFrameworkArgs tfa; 
@@ -65,8 +65,8 @@ public class TestFramework implements Callable<TestFrameworkResults> {
 	}
 	
 	@Override
-	public TestFrameworkResults call() throws Exception {
-		TestFrameworkResults tfr = new TestFrameworkResults();
+	public TestFrameworkResult call() throws Exception {
+		TestFrameworkResult tfr = new TestFrameworkResult();
 		
 		// TEST 1: compare labelling results
 		// shuffling every time
@@ -253,7 +253,7 @@ public class TestFramework implements Callable<TestFrameworkResults> {
 	}
 
 	
-	public static class TestFrameworkResults{
+	public static class TestFrameworkResult{
 		TreeMap<TreeSet<Node[]>,TreeSet<String>> labellingComparisons;
 		TreeSet<String> labellingExceptions;
 		TreeMap<TreeSet<Node[]>,TreeSet<String>> leaningComparisons;
@@ -261,7 +261,7 @@ public class TestFramework implements Callable<TestFrameworkResults> {
 		TreeSet<String> mappingsFailures;
 		
 		
-		public TestFrameworkResults(){
+		public TestFrameworkResult(){
 			;
 		}
 
@@ -375,7 +375,7 @@ public class TestFramework implements Callable<TestFrameworkResults> {
 //		TestFrameworkArgs tfa = new TestFrameworkArgs();
 		TestFramework tf = new TestFramework(triples);
 		
-		TestFrameworkResults tfr = tf.call();
+		TestFrameworkResult tfr = tf.call();
 		
 		System.err.println("Labelling exceptions "+tfr.labellingExceptions);
 		System.err.println("Labelling partition sizes "+tfr.labellingComparisons.size());

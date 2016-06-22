@@ -39,9 +39,12 @@ import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
+import cl.uchile.dcc.blabel.test.TestFramework;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkArgs;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkResult;
 
 public class RunSyntheticEvaluation {
-	public static final Level LOG_LEVEL = Level.INFO;
+	public static final Level LOG_LEVEL = Level.WARNING;
 	public static final Logger LOG = Logger.getLogger(RunSyntheticEvaluation.class.getName());
 	static{
 		for(Handler h : LOG.getParent().getHandlers()){
@@ -60,7 +63,7 @@ public class RunSyntheticEvaluation {
 	
 	public static final Resource PRED = new Resource("p");
 	
-	public static enum Benchmark { LEAN, LABEL, BOTH, CONTROL };
+	public static enum Benchmark { LEAN, LABEL, BOTH, CONTROL, TEST };
 	
 	public static String BENCHMARK_OPTIONS;
 	static{
@@ -87,10 +90,10 @@ public class RunSyntheticEvaluation {
 		
 		Option rO = new Option("r", "randomise dfs search (don't guess best, select random)");
 		
-		Option tO = new Option("t", "timeout for each test in seconds (default "+DEFAULT_TIMEOUT+")");
+		Option tO = new Option("t", "timeout for each graph in seconds (default "+DEFAULT_TIMEOUT+")");
 		tO.setArgs(1);
 		
-		Option bO = new Option("b", "benchmark to run: "+BENCHMARK_OPTIONS);
+		Option bO = new Option("b", "benchmark to run: "+BENCHMARK_OPTIONS+" ("+Benchmark.TEST.toString()+" ignores other options)");
 		bO.setArgs(1);
 		bO.setRequired(true);
 
@@ -202,8 +205,8 @@ public class RunSyntheticEvaluation {
 					ExecutorService executor = Executors.newSingleThreadExecutor();
 			        Future<GraphLeaningResult> future = executor.submit(gl);
 			        
+			        long b4 = System.currentTimeMillis();
 			        try {
-			        	long b4 = System.currentTimeMillis();
 			            LOG.info("Running leaning ...");
 			            GraphLeaningResult glr = future.get(timeout, TimeUnit.SECONDS);
 			            LOG.info("... finished!");
@@ -217,7 +220,7 @@ public class RunSyntheticEvaluation {
 				        }
 			        } catch (Exception e) {
 			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
-			        	System.out.println("LEAN\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	System.out.println("LEAN\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 			        	
 			        	fail = true; // skip to next class
 			        } 
@@ -234,8 +237,8 @@ public class RunSyntheticEvaluation {
 					ExecutorService executor = Executors.newSingleThreadExecutor();
 			        Future<GraphLabellingResult> future = executor.submit(cl);
 
+			        long b4 = System.currentTimeMillis();
 			        try {
-			        	long b4 = System.currentTimeMillis();
 			            LOG.info("Running labelling ...");
 			            GraphLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
 			            LOG.info("... finished!");
@@ -243,7 +246,59 @@ public class RunSyntheticEvaluation {
 			            System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+(System.currentTimeMillis()-b4)+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());
 			        } catch (Exception e) {
 			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
-			        	System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	
+			        	fail = true; // skip to next class
+			        } 
+			        executor.shutdownNow();
+			        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+				}
+				
+				if(bench.equals(Benchmark.TEST)){
+					TestFrameworkArgs tfa = new TestFrameworkArgs();
+					TestFramework tf = new TestFramework(data,tfa);
+					
+					ExecutorService executor = Executors.newSingleThreadExecutor();
+			        Future<TestFrameworkResult> future = executor.submit(tf);
+
+			        long b4 = System.currentTimeMillis();
+			        try {
+			            LOG.info("Running test ...");
+			            TestFrameworkResult tfr = future.get(timeout, TimeUnit.SECONDS);
+			            LOG.info("... finished!");
+			            
+			            String message = "TEST\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t";
+			            
+			            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty()){
+			            	// no explicit error found
+			            	// but possible that tests timed out
+			            	// or otherwise failed to run
+			            	message += "OKAY";
+			            } else{
+			            	message += "ERROR";
+			            	if(tfr.getLabellingComparisons().size()>1){
+			            		message += "\tLABELLING_PARITION_SIZE\t"+tfr.getLabellingComparisons().size()+"\tLABELLING_PARITIONS"+tfr.getLabellingComparisons().values();
+			            	}
+			            	if(tfr.getLeaningComparisons().size()>1){
+			            		message += "\tLEANING_PARITION_SIZE\t"+tfr.getLeaningComparisons().size()+"\tLEANING_PARITIONS"+tfr.getLeaningComparisons().values();
+			            	}
+			            	if(!tfr.getMappingsFailures().isEmpty()){
+			            		message += "\tMAPPING_FAILURES\t"+tfr.getMappingsFailures();
+			            	}
+			            	
+			            }
+			            if(!tfr.getLabellingExceptions().isEmpty() || !tfr.getLeaningExceptions().isEmpty()){
+		            		message += "\tPARTIAL";
+		            		if(!tfr.getLabellingExceptions().isEmpty())
+		            			message += "\tLABELLING_EXCEPTIONS: "+tfr.getLabellingExceptions();
+		            		if(!tfr.getLeaningExceptions().isEmpty())
+		            			message += "\tLEANING_EXCEPTIONS: "+tfr.getLeaningExceptions();
+		            	}
+			            
+			            System.out.println(message);
+			        } catch (Exception e) {
+			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
+			        	System.out.println("TEST\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());
 			        	
 			        	fail = true; // skip to next class
 			        } 
