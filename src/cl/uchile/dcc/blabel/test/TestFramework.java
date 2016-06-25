@@ -1,7 +1,12 @@
 package cl.uchile.dcc.blabel.test;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -26,6 +31,7 @@ import org.semanticweb.yars.nx.parser.NxParser;
 
 import com.sun.istack.internal.logging.Logger;
 
+import cl.uchile.dcc.blabel.cli.RunNQuadsTest;
 import cl.uchile.dcc.blabel.label.GraphColouring;
 import cl.uchile.dcc.blabel.label.GraphLabelling;
 import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingArgs;
@@ -34,6 +40,7 @@ import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkArgs.SaveLevel;
 import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkResult;
 
 public class TestFramework implements Callable<TestFrameworkResult> {
@@ -51,8 +58,22 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 	public static String LABEL_NO_PRUNING_TEST = "lab_np";
 	
 	public static String DFS_TEST = "dfs_ord";
+	public static String DFS_NOPRUNE_TEST = "dfs_np_ord";
 	public static String DFS_RANDOM_TEST = "dfs_rand";
+	public static String DFS_RANDOM_NOPRUNE_TEST = "dfs_np_rand";
 	public static String BFS_TEST = "bfs";
+	
+	public static String README_FILENAME = "README.txt";
+	public static String OUTPUT_SUBDIR = "output";
+	public static String INPUT_SUBDIR = "input";
+	
+	public static String SUFFIX = ".nt";
+	public static String LABEL_SUBDIR = "label/";
+	public static String LEAN_SUBDIR = "lean/";
+	
+	public static String SHUFFLE_INPUT = "input_shuffle";
+	
+	public static String OUTPUT = "output_part";
 	
 	
 	public TestFramework(Collection<Node[]> data){
@@ -72,6 +93,8 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		// shuffling every time
 		TreeMap<TreeSet<Node[]>,TreeSet<String>> labellingComparisons = new TreeMap<TreeSet<Node[]>,TreeSet<String>>(GraphColouring.GRAPH_COMP);
 		TreeSet<String> labellingExceptions = new TreeSet<String>();
+		
+		ArrayList<ArrayList<Node[]>> inputs = new ArrayList<ArrayList<Node[]>>();
 		for(int i=0; i<tfa.shuffles; i++){
 			ArrayList<Node[]> data = new ArrayList<Node[]>();
 			if(i==0){
@@ -79,6 +102,7 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 			} else{
 				data = renameBnodesAndShuffle(this.data);
 			}
+			inputs.add(data);
 			
 			// compare with pruning and without
 			tfa.getLabellingArgs().setPrune(true);
@@ -90,6 +114,10 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		tfr.setLabellingComparisons(labellingComparisons);
 		tfr.setLabellingExceptions(labellingExceptions);
 		
+		// write inputs/outputs if needed
+		if(tfa.getSaveToDirectory()!=null && !tfa.getSaveLevel().equals(SaveLevel.NONE)){
+			saveInputsOutputs(labellingComparisons, LABEL_SUBDIR, inputs, labellingExceptions, null, tfa);
+		}
 		
 		// TEST 2: compare leaning results
 		// shuffling every time and recursing once
@@ -101,6 +129,7 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		// for errors where map does not give lean output
 		// or is not complete
 		TreeSet<String> mappingsFailures = new TreeSet<String>();
+		inputs.clear();
 		for(int i=0; i<tfa.shuffles; i++){
 			ArrayList<Node[]> data = new ArrayList<Node[]>();
 			if(i==0){
@@ -108,15 +137,56 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 			} else{
 				data = renameBnodesAndShuffle(this.data);
 			}
+			inputs.add(data);
 			
 			testLeanAndLabel(data,DFS_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
+			testLeanAndLabel(data,DFS_NOPRUNE_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
 			testLeanAndLabel(data,DFS_RANDOM_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
+			testLeanAndLabel(data,DFS_RANDOM_NOPRUNE_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
 			testLeanAndLabel(data,BFS_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
 		}
 		tfr.setLeaningComparisons(leaningComparisons);
 		tfr.setLeaningExceptions(leaningExceptions);
 		tfr.setMappingsFailures(mappingsFailures);
+		
+		// write inputs/outputs if needed
+		if(tfa.getSaveToDirectory()!=null && !tfa.getSaveLevel().equals(SaveLevel.NONE)){
+			saveInputsOutputs(leaningComparisons, LEAN_SUBDIR, inputs, leaningExceptions, mappingsFailures, tfa);
+		}
 		return tfr;
+	}
+	
+	private static void saveInputsOutputs(TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, String subdir, ArrayList<ArrayList<Node[]>> inputs, TreeSet<String> exceptions, TreeSet<String> mappingExceptions, TestFrameworkArgs tfa) throws IOException{
+		// write inputs/outputs if needed
+		
+		boolean error = comparisons.size() > 1 || (mappingExceptions!=null && !mappingExceptions.isEmpty());
+		boolean exception = exceptions.isEmpty();
+		if(tfa.getSaveLevel().equals(SaveLevel.ALL) || error || (tfa.getSaveLevel().equals(SaveLevel.ONLY_ERROR_OR_EXCEPTION) && exception)){
+			String dir = tfa.getSaveToDirectory()+"/"+subdir+"/";
+			mkdirs(dir);
+			BufferedWriter readme = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(dir+"/"+README_FILENAME),"utf-8"));
+
+			readme.write("Exceptions "+exceptions+"\n");
+			readme.write("Partition sizes "+comparisons.size()+"\n");
+			if(comparisons.size()>1){
+				readme.write("Partitions: "+comparisons.values()+"\n");
+			}
+			if(mappingExceptions!=null){
+				readme.write("Mapping Exceptions "+mappingExceptions+"\n");
+			}
+			readme.close();
+
+			for(int i=0; i<inputs.size(); i++){
+				String filename = dir+SHUFFLE_INPUT+"_"+i+SUFFIX;
+				RunNQuadsTest.writeToFile(inputs.get(i),filename);
+			}
+
+			int i = 0;
+			for(TreeSet<Node[]> graph: comparisons.keySet()){
+				String filename = dir+OUTPUT+"_"+(i++)+SUFFIX;
+				RunNQuadsTest.writeToFile(graph,filename);
+			}
+		}
 	}
 	
 	public static boolean testLabel(Collection<Node[]> data, GraphLabellingArgs la, TestFrameworkArgs tfa, String testname,
@@ -156,8 +226,12 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		GraphLeaning gl = null;
 		if(testname.startsWith(DFS_TEST)){
 			gl = new DFSGraphLeaning(data);
+		} else if(testname.startsWith(DFS_NOPRUNE_TEST)){
+			gl = new DFSGraphLeaning(data,false,false);
 		} else if(testname.startsWith(DFS_RANDOM_TEST)){
-			gl = new DFSGraphLeaning(data,false);
+			gl = new DFSGraphLeaning(data,true);
+		} else if(testname.startsWith(DFS_RANDOM_NOPRUNE_TEST)){
+			gl = new DFSGraphLeaning(data,true,false);
 		} else{
 			gl = new BFSGraphLeaning(data);
 		}
@@ -236,8 +310,8 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 					 BNode r = renaming.get(d[i]);
 					 if(r==null){
 						 do{
-							 r = new BNode(BNODE_PREFIX+RAND.nextInt());
-						 } while(used.add(r));
+							 r = new BNode(BNODE_PREFIX+Math.abs(RAND.nextInt()));
+						 } while(!used.add(r));
 						 renaming.put((BNode)d[i], r);
 					 }
 					copy[i] = r;
@@ -318,12 +392,16 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 	
 	public static class TestFrameworkArgs{
 		public static final long DEFAULT_TIMEOUT = 60;
-		public static final int DEFAULT_SHUFFLES = 3;
+		public static final int DEFAULT_SHUFFLES = 4;
 		public static final GraphLabellingArgs DEFAULT_LABELLING_ARGS = new GraphLabellingArgs();
+		public static enum SaveLevel { NONE, ONLY_ERROR, ONLY_ERROR_OR_EXCEPTION, ALL };
+		public static SaveLevel DEFAULT_SAVE_LEVEL = SaveLevel.NONE;
 		
 		long timeout = DEFAULT_TIMEOUT;
 		int shuffles = DEFAULT_SHUFFLES;
 		GraphLabellingArgs labellingArgs = DEFAULT_LABELLING_ARGS;
+		String saveToDirectory;
+		SaveLevel saveLevel = DEFAULT_SAVE_LEVEL;
 		
 		public TestFrameworkArgs(){
 			;
@@ -352,10 +430,30 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		public void setLabellingArgs(GraphLabellingArgs labellingArgs) {
 			this.labellingArgs = labellingArgs;
 		}
+
+		public String getSaveToDirectory() {
+			return saveToDirectory;
+		}
+
+		public void setSaveToDirectory(String saveToDirectory) {
+			this.saveToDirectory = saveToDirectory;
+		}
+
+		public SaveLevel getSaveLevel() {
+			return saveLevel;
+		}
+
+		public void setSaveLevel(SaveLevel saveLevel) {
+			this.saveLevel = saveLevel;
+		}
 	}
 	
 	public static void main(String[] args) throws Exception{
-		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
+//		String dir = "data/tf/grid-2-25/";
+		String dir = "data/tf/grid-2-25/";
+		
+		BufferedReader br = new BufferedReader(new FileReader("data/grid-2-25.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/square.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/saramandai.nq"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/null-test2.nt"));
@@ -372,8 +470,12 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		
 		br.close();
 		
-//		TestFrameworkArgs tfa = new TestFrameworkArgs();
-		TestFramework tf = new TestFramework(triples);
+		TestFrameworkArgs tfa = new TestFrameworkArgs();
+		tfa.setSaveToDirectory(dir);
+		tfa.setSaveLevel(SaveLevel.ONLY_ERROR);
+		tfa.setShuffles(4);
+		
+		TestFramework tf = new TestFramework(triples, tfa);
 		
 		TestFrameworkResult tfr = tf.call();
 		
@@ -390,5 +492,26 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		}
 		System.err.println("Mapping exceptions "+tfr.mappingsFailures);
 		
+	}
+	
+//	public static void saveToDirectory(Map<TreeSet<Node[]>, TreeSet<String>> parts, String directory) throws IOException{
+//		for(Map.Entry<TreeSet<Node[]>, TreeSet<String>> e : parts.entrySet()){
+//			String filename = "f-";
+//			for(String s:e.getValue()){
+//				filename += s+"++";
+//			}
+//			
+//			
+//			filename = filename.replaceAll("\\W+", "");
+//			filename += ".nt";
+//			
+//			
+//			writeToFile(e.getKey(),directory+"/"+filename);
+//			
+//		}
+//	}
+	
+	public static boolean mkdirs(String dir){
+		return new File(dir).mkdirs();
 	}
 }

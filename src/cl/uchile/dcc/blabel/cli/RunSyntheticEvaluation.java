@@ -277,10 +277,10 @@ public class RunSyntheticEvaluation {
 			            } else{
 			            	message += "ERROR";
 			            	if(tfr.getLabellingComparisons().size()>1){
-			            		message += "\tLABELLING_PARITION_SIZE\t"+tfr.getLabellingComparisons().size()+"\tLABELLING_PARITIONS"+tfr.getLabellingComparisons().values();
+			            		message += "\tLABELLING_PARTITION_SIZE\t"+tfr.getLabellingComparisons().size()+"\tLABELLING_PARTITIONS"+tfr.getLabellingComparisons().values();
 			            	}
 			            	if(tfr.getLeaningComparisons().size()>1){
-			            		message += "\tLEANING_PARITION_SIZE\t"+tfr.getLeaningComparisons().size()+"\tLEANING_PARITIONS"+tfr.getLeaningComparisons().values();
+			            		message += "\tLEANING_PARTITION_SIZE\t"+tfr.getLeaningComparisons().size()+"\tLEANING_PARTITIONS"+tfr.getLeaningComparisons().values();
 			            	}
 			            	if(!tfr.getMappingsFailures().isEmpty()){
 			            		message += "\tMAPPING_FAILURES\t"+tfr.getMappingsFailures();
@@ -325,7 +325,7 @@ public class RunSyntheticEvaluation {
 		return bnodes.size();
 	}
 	
-	private static ArrayList<Node[]> loadAndConvert(File fn) throws IOException{
+	public static ArrayList<Node[]> loadAndConvert(File fn) throws IOException{
 		ArrayList<Node[]> data = new ArrayList<Node[]>();
 		
 		BufferedReader br = new BufferedReader(new FileReader(fn));

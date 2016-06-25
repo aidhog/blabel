@@ -1,10 +1,15 @@
 package cl.uchile.dcc.blabel.cli;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -33,6 +38,7 @@ import org.apache.commons.cli.ParseException;
 import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.parser.NxParser;
+import org.semanticweb.yars.util.CallbackNxBufferedWriter;
 import org.semanticweb.yars.util.FlyweightNodeIterator;
 
 import com.google.common.hash.HashCode;
@@ -47,6 +53,10 @@ import cl.uchile.dcc.blabel.lean.BFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning;
 import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
+import cl.uchile.dcc.blabel.test.TestFramework;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkArgs;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkArgs.SaveLevel;
+import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkResult;
 
 public class RunNQuadsTest {
 	static Logger LOG = Logger.getLogger(RunNQuadsTest.class.getSimpleName());
@@ -65,6 +75,8 @@ public class RunNQuadsTest {
 	
 	public static final int DEFAULT_TIMEOUT = 600; //in seconds
 	
+	public static String ENCODING = "UTF-8";
+	
 	public static void main(String[] args) throws IOException, InterruptedException{
 		long b4 = System.currentTimeMillis();
 		
@@ -80,15 +92,24 @@ public class RunNQuadsTest {
 		Option tO = new Option("t", "timeout for each test in seconds (default "+DEFAULT_TIMEOUT+")");
 		tO.setArgs(1);
 		
-		Option sO = new Option("s", "hashing scheme: 0:md5 1:murmur3_128 2:sha1 3:sha256 4:sha512");
+		Option sO = new Option("s", "hashing scheme: 0:md5 1:murmur3_128 2:sha1 3:sha256 4:sha512 (murmur3_128 fastest)");
 		sO.setArgs(1);
 		
-		Option lO = new Option("l", "leaning algorithm: 0:dfs 1:bfs");
+		Option lO = new Option("l", "leaning algorithm: 0:dfs 1:bfs (dfs best ... bfs for testing)");
 		lO.setArgs(1);
 		
-		Option rO = new Option("r", "randomise dfs search (don't guess best, select random)");
+		Option nleanO = new Option("nlean", "no pruning by automorphism in DFS leaning (only enable for testing)");
+		
+		Option nlabelO = new Option("nlabel", "no pruning by automorphism in labelling (only enable for testing)");
+		
+		Option rO = new Option("r", "randomise dfs search (don't guess best, select random ... only enable for testing)");
 		
 		Option dO = new Option("d", "if running isomorphism labelling, count duplicate graphs");
+		
+		Option eO = new Option("e", "write exception graphs to this directory (optional)");
+		eO.setArgs(1);
+		
+		Option errO = new Option("err", "if running test framework, only write confirmed errors, not exceptions");
 		
 		Option bO = new Option("b", "select the process to run: "+RunSyntheticEvaluation.BENCHMARK_OPTIONS);
 		bO.setArgs(1);
@@ -103,6 +124,10 @@ public class RunNQuadsTest {
 		options.addOption(dO);
 		options.addOption(bO);
 		options.addOption(tO);
+		options.addOption(eO);
+		options.addOption(errO);
+		options.addOption(nlabelO);
+		options.addOption(nleanO);
 		options.addOption(helpO);
 
 		CommandLineParser parser = new BasicParser();
@@ -135,6 +160,15 @@ public class RunNQuadsTest {
 		boolean randomiseDfs = cmd.hasOption("r");
 		
 		boolean countDupes = cmd.hasOption("d");
+		
+		boolean noPruneLean = cmd.hasOption("nlean");
+		boolean noPruneLabel = cmd.hasOption("nlabel");
+		
+		String exceptionDir = cmd.getOptionValue("e");
+		if(exceptionDir!=null) new File(exceptionDir).mkdirs();
+		
+		// print only errors, not exceptions, in test framewoek
+		boolean err = cmd.hasOption("err");
 		
 		HashFunction hf = null;
 		int s = -1;
@@ -191,7 +225,7 @@ public class RunNQuadsTest {
 		System.out.println("===============================================");
 		if(l!=-1){
 			if(l==0){
-				System.out.println("Running DFS leaning algorithm, random: "+randomiseDfs);
+				System.out.println("Running DFS leaning algorithm, random: "+randomiseDfs+" prune: "+!noPruneLean);
 				System.out.println("===============================================");
 			} else if(l==1) {
 				System.out.println("Running BFS leaning algorithm");
@@ -204,7 +238,9 @@ public class RunNQuadsTest {
 				return;
 			}
 		}
-		if(hf!=null){
+		if(bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH)){
+			System.out.println("Running labelling algorithm, prune: "+!noPruneLabel);
+			System.out.println("===============================================");
 			System.out.println("Hashing:\t"+hf.getClass().getSimpleName());
 			System.out.println("===============================================");
 			System.out.println("Counting duplicate isomorphic graphs:\t"+countDupes);
@@ -256,8 +292,8 @@ public class RunNQuadsTest {
 					if(bench.equals(Benchmark.LEAN) || bench.equals(Benchmark.BOTH)){
 						GraphLeaning gl = null;
 						if(l==0){
-							LOG.info("Running DFS leaning algorithm, random: "+randomiseDfs);
-							gl = new DFSGraphLeaning(data,randomiseDfs);
+							LOG.info("Running DFS leaning algorithm, random: "+randomiseDfs+" pruning: "+!noPruneLean);
+							gl = new DFSGraphLeaning(data,randomiseDfs,!noPruneLean);
 						} else if(l==1) {
 							LOG.info("Running BFS leaning algorithm");
 							gl = new BFSGraphLeaning(data);
@@ -283,7 +319,7 @@ public class RunNQuadsTest {
 				        } catch (Exception e) {
 				        	System.out.println("LEAN\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 				        	LOG.warning(e.getClass().getName()+": "+e.getMessage());
-				        	
+				        	writeToDir(exceptionDir,old,"LEAN",data);
 				        	fail = true;
 				        }
 				        executor.shutdownNow();
@@ -293,6 +329,7 @@ public class RunNQuadsTest {
 					if(!fail && (bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH))){
 						GraphLabellingArgs cla = new GraphLabellingArgs();
 						cla.setHashFunction(hf);
+						cla.setPrune(!noPruneLabel);
 						
 						GraphLabelling cl = new GraphLabelling(data,cla);
 						
@@ -301,7 +338,7 @@ public class RunNQuadsTest {
 
 				        long b4l = System.currentTimeMillis();
 				        try {
-				            LOG.info("Running labelling ...");
+				            LOG.info("Running labelling, pruning: "+!noPruneLabel);
 				            GraphLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
 				            LOG.info("... finished!");
 				            
@@ -321,8 +358,71 @@ public class RunNQuadsTest {
 				        } catch (Exception e) {
 				        	System.out.println("LABEL\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 				        	LOG.warning(e.getClass().getName()+": "+e.getMessage());
-				        	
-				        	fail = true; // skip to next class
+				        	writeToDir(exceptionDir,old,"LABEL",data);
+				        	fail = true;
+				        } 
+				        executor.shutdownNow();
+				        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+					}
+					
+					if(bench.equals(Benchmark.TEST)){
+						TestFrameworkArgs tfa = new TestFrameworkArgs();
+						if(exceptionDir!=null){
+							tfa.setSaveToDirectory(exceptionDir);
+							if(err){
+								tfa.setSaveLevel(SaveLevel.ONLY_ERROR);
+							} else{
+								tfa.setSaveLevel(SaveLevel.ONLY_ERROR_OR_EXCEPTION);
+							}
+						}
+						
+						TestFramework tf = new TestFramework(data,tfa);
+						
+						ExecutorService executor = Executors.newSingleThreadExecutor();
+				        Future<TestFrameworkResult> future = executor.submit(tf);
+
+				        long b4l = System.currentTimeMillis();
+				        try {
+				            LOG.info("Running test ...");
+				            TestFrameworkResult tfr = future.get(timeout, TimeUnit.SECONDS);
+				            LOG.info("... finished!");
+				            
+				            String message = "TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t";
+				            
+				            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty()){
+				            	// no explicit error found
+				            	// but possible that tests timed out
+				            	// or otherwise failed to run
+				            	message += "OKAY";
+				            } else{
+				            	message += "ERROR";
+				            	if(tfr.getLabellingComparisons().size()>1){
+				            		message += "\tLABELLING_PARTITION_SIZE\t"+tfr.getLabellingComparisons().size()+"\tLABELLING_PARTITIONS"+tfr.getLabellingComparisons().values();
+				            	}
+				            	if(tfr.getLeaningComparisons().size()>1){
+				            		message += "\tLEANING_PARTITION_SIZE\t"+tfr.getLeaningComparisons().size()+"\tLEANING_PARTITIONS"+tfr.getLeaningComparisons().values();
+				            	}
+				            	if(!tfr.getMappingsFailures().isEmpty()){
+				            		message += "\tMAPPING_FAILURES\t"+tfr.getMappingsFailures();
+				            	}
+				            	
+				            }
+				            if(!tfr.getLabellingExceptions().isEmpty() || !tfr.getLeaningExceptions().isEmpty()){
+			            		message += "\tPARTIAL";
+			            		if(!tfr.getLabellingExceptions().isEmpty())
+			            			message += "\tLABELLING_EXCEPTIONS: "+tfr.getLabellingExceptions();
+			            		if(!tfr.getLeaningExceptions().isEmpty())
+			            			message += "\tLEANING_EXCEPTIONS: "+tfr.getLeaningExceptions();
+			            	}
+				            
+				            System.out.println(message);
+				        } catch (Exception e) {
+				        	LOG.info(e.getClass().getName()+" "+e.getMessage());
+				        	System.out.println("TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());
+				        	if(!err){
+				        		writeToDir(exceptionDir,old,"TEST",data);
+				        	}
+				        	fail = true;
 				        } 
 				        executor.shutdownNow();
 				        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
@@ -386,9 +486,9 @@ public class RunNQuadsTest {
 		System.out.println("===============================================");
 		System.out.println("Number of failures:\t"+failed);
 		System.out.println("===============================================");
-		System.out.println("Slowest time:\t"+slowestTime);
+		System.out.println("Slowest successful time:\t"+slowestTime);
 		System.out.println("===============================================");
-		System.out.println("Slowest graph:\t"+slowestGraph);
+		System.out.println("Slowest successful graph:\t"+slowestGraph);
 		System.out.println("===============================================");
 		System.out.println("Total duration (ms):\t"+(end-b4));
 		System.out.println("===============================================");
@@ -400,6 +500,23 @@ public class RunNQuadsTest {
 		LOG.info("Finished in "+(System.currentTimeMillis()-b4));
 	}
 	
+	private static void writeToDir(String exceptionDir, Node old, String string, Collection<Node[]> data) throws IOException {
+		if(exceptionDir==null)
+			return;
+		String filename = exceptionDir+"/"+string+"-"+URLEncoder.encode(old.toString(),ENCODING);
+		
+		writeToFile(data, filename);
+	}
+	
+	public static void writeToFile(Collection<Node[]> graph, String file) throws IOException{
+		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file),ENCODING));
+		CallbackNxBufferedWriter cb = new CallbackNxBufferedWriter(bw);
+		for(Node[] triple:graph){
+			cb.processStatement(triple);
+		}
+		bw.close();
+	}
+
 	public static class BiggestTreeSetComparator implements Comparator<TreeSet<Node>>{
 
 		@Override

@@ -1,5 +1,8 @@
 package cl.uchile.dcc.blabel.label;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -16,11 +19,13 @@ import java.util.logging.Logger;
 import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.NodeComparator;
+import org.semanticweb.yars.nx.parser.NxParser;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
 import cl.uchile.dcc.blabel.label.util.GraphComparator;
 import cl.uchile.dcc.blabel.label.util.HashGraph;
 import cl.uchile.dcc.blabel.label.util.Leaves;
@@ -656,47 +661,53 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 		return true;
 	}
 
-//	public static void main(String[] args) throws IOException, InterruptedException, HashCollisionException{
-//		String file = "test/simple3.nt";
-//
-//
-//		BufferedReader br = new BufferedReader(new FileReader(file));
-//		NxParser nxp = new NxParser(br);
-//
-//		HashFunction hf = Hashing.crc32();
-//
-//		HashGraph hg = new HashGraph(hf);
-//
-//		while(nxp.hasNext()){
-//			hg.addTriple(nxp.next());
-//		}
-//
-//		Collection<HashGraph> bnps = hg.blankNodePartition();
-//
-//		TreeMap<TreeSet<Node[]>,Integer> graphs = new TreeMap<TreeSet<Node[]>,Integer>(GraphColouring.GRAPH_COMP);
-//		for(HashGraph bnp:bnps){
-//			GraphColouring gc = new GraphColouring(bnp);
-//			gc.execute();
-//
-//			TreeSet<Node[]> cg = gc.getCanonicalGraph();
-//			Integer count = graphs.get(cg);
-//			if(count==null){
-//				graphs.put(cg,1);
-//			} else{
-//				graphs.put(cg,count+1);
-//				cg = gc.getCanonicalGraph(count);
+	public static void main(String[] args) throws IOException, InterruptedException, HashCollisionException{
+		String file = "data/tf/grid-2-25/label/input_shuffle_1.nt";
+
+
+		BufferedReader br = new BufferedReader(new FileReader(file));
+		NxParser nxp = new NxParser(br);
+
+		ArrayList<Node[]> stmts = new ArrayList<Node[]>();
+
+		while(nxp.hasNext()){
+			stmts.add(nxp.next());
+		}
+		
+		GraphLabelling cl = new GraphLabelling(stmts);
+
+		try{
+			LOG.info("Running labelling ...");
+			GraphLabellingResult clr = cl.call();
+			LOG.info("... done.");
+
+			LOG.info("Number of blank nodes: "+clr.getBnodeCount());
+			LOG.info("Number of partitions: "+clr.getPartitionCount());
+			LOG.info("Number of colour iterations: "+clr.getColourIterationCount());
+			LOG.info("Number of leafs: "+clr.getLeafCount());
+			LOG.info("Graph hash: "+clr.getHashGraph().getGraphHash());
+
+			// the canonical labeling writes blank node using hashes w/o prefix
+			// this code adds the prefix and maps them to URIs or blank nodes
+			// as specified in the options
+//			LOG.info("Writing output ...");
+//			int written = 0;
+//			TreeSet<Node[]> canonicalGraph = clr.getGraph();
+//			GraphLabelIterator gli = new GraphLabelIterator(canonicalGraph.iterator(), prefix, writeBnode);
+//			while(gli.hasNext()){
+//				out.processStatement(gli.next());
+//				written ++;
 //			}
-//
-//			System.out.println("==============");
-//			for(Node[] triple: cg){
-//				System.out.println(Nodes.toN3(triple));
-//			}
-//
-//			System.out.println("==============");
-//		}
-//		br.close();
-//
-//	}
+//			LOG.info("... written "+written+" statements.");
+		} catch(Exception e){
+			LOG.severe(e.getMessage());
+			e.printStackTrace();
+		}
+
+		
+		br.close();
+
+	}
 
 	public GraphResult call() throws Exception {
 		execute();

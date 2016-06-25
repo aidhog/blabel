@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.TreeSet;
 import java.util.logging.ConsoleHandler;
@@ -34,14 +35,23 @@ import org.semanticweb.yars.nx.parser.NxParser;
 import org.semanticweb.yars.util.CallbackNxBufferedWriter;
 import org.semanticweb.yars.util.FlyweightNodeIterator;
 
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hashing;
+
+import cl.uchile.dcc.blabel.label.GraphColouring.HashCollisionException;
 import cl.uchile.dcc.blabel.label.GraphLabelling;
 import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingArgs;
 import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
 import cl.uchile.dcc.blabel.label.util.GraphLabelIterator;
+import cl.uchile.dcc.blabel.lean.DFSGraphLeaning;
+import cl.uchile.dcc.blabel.lean.GraphLeaning.GraphLeaningResult;
 
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
-
+/**
+ * Main method for leaning and/or labelling an RDF graph.
+ * 
+ * @author ahogan
+ *
+ */
 public class LabelRDFGraph {
 	static final Logger LOG = Logger.getLogger(LabelRDFGraph.class.getSimpleName());
 	public static final Level LOG_LEVEL = Level.INFO;
@@ -60,7 +70,7 @@ public class LabelRDFGraph {
 
 	public static String DEFAULT_ENCODING = "UTF-8";
 
-	public static void main(String[] args) throws IOException{
+	public static void main(String[] args) throws IOException, InterruptedException, HashCollisionException{
 		long b4 = System.currentTimeMillis();
 
 		Option iO = new Option("i", "input file [enter '"+STD+"' for stdin]");
@@ -74,6 +84,10 @@ public class LabelRDFGraph {
 		igzO.setArgs(0);
 
 		Option helpO = new Option("h", "print help");
+		
+		Option lO = new Option("l", "lean beforehand");
+		
+		Option olO = new Option("lo", "lean only, do not label");
 
 		Option sO = new Option("s", "hashing scheme: 0:md5 1:murmur3_128 2:sha1 3:sha256 4:sha512 (default "+GraphLabellingArgs.DEFAULT_HASHING.toString()+")");
 		sO.setArgs(1);
@@ -105,6 +119,8 @@ public class LabelRDFGraph {
 		options.addOption(igzO);
 		options.addOption(sO);
 		options.addOption(helpO);
+		options.addOption(lO);
+		options.addOption(olO);
 		options.addOption(oO);
 		options.addOption(ogzO);
 		options.addOption(pO);
@@ -168,6 +184,9 @@ public class LabelRDFGraph {
 			LOG.info("Empty input");
 			return;
 		}
+		
+		boolean onlylean = cmd.hasOption("lo");
+		boolean lean = cmd.hasOption("l");
 
 
 		OutputStream os = null;
@@ -196,26 +215,81 @@ public class LabelRDFGraph {
 		BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os,oestr));
 		CallbackNxBufferedWriter cb = new CallbackNxBufferedWriter(bw);
 
-		LOG.info("Starting process ...");
-		// set the arguments for the labelling
-		GraphLabellingArgs cla = new GraphLabellingArgs();
-		if(hf!=null)
-			cla.setHashFunction(hf);
-
-		cla.setDistinguishIsoPartitions(!cmd.hasOption(ddpO.getOpt()));
-		cla.setUniquePerGraph(!cmd.hasOption(uppO.getOpt()));
-
 		// re-use node references: saves mem
 		// at cost of map lookups
 		Iterator<Node[]> iter = nxp;
 		iter = new FlyweightNodeIterator(FW,iter);
-
-		// does the main work
-		labelGraph(iter,cb,cla,prefix,writeBnode);
+		
+		// load the graph into memory
+		Collection<Node[]> stmts = new ArrayList<Node[]>();
+		boolean bnode = false;
+		while(iter.hasNext()){
+			Node[] triple = iter.next();
+			if(triple.length>=3){
+				stmts.add(new Node[]{triple[0], triple[1], triple[2]});
+				bnode = bnode | (triple[0] instanceof BNode) | (triple[2] instanceof BNode);
+			} else{
+				LOG.warning("Not a triple "+Nodes.toN3(triple));
+			}
+		}
+		LOG.info("Loaded "+stmts.size()+" triples");
+		
+		if(!bnode){
+			LOG.info("No bnodes ... buffering triple input to output");
+			for(Node[] triple:stmts){
+				cb.processStatement(triple);
+			}
+		} 
+		
+		if(bnode && (lean || onlylean)){
+			LOG.info("Starting leaning ...");
+			GraphLeaningResult glr  = leanGraph(stmts,cb);
+			if(glr.getLeanData().size() == stmts.size()){
+				LOG.info("Input graph was lean");
+			} else{
+				LOG.info("Removed "+(stmts.size() - glr.getLeanData().size())+" triples during leaning");
+			}
+			
+			if(onlylean){
+				LOG.info("Labelling not requeseted, writing output ...");
+				for(Node[] triple:glr.getLeanData()){
+					cb.processStatement(triple);
+				}
+				LOG.info("... done.");
+			} else{
+				stmts = glr.getLeanData();
+			}
+		}
+		if(bnode && !onlylean){	
+			LOG.info("Starting labelling ...");
+			// set the arguments for the labelling
+			GraphLabellingArgs cla = new GraphLabellingArgs();
+			if(hf!=null)
+				cla.setHashFunction(hf);
+	
+			cla.setDistinguishIsoPartitions(!cmd.hasOption(ddpO.getOpt()));
+			cla.setUniquePerGraph(!cmd.hasOption(uppO.getOpt()));
+			
+			labelGraph(stmts,cb,cla,prefix,writeBnode);
+			LOG.info("... done.");
+		}
 
 		LOG.info("Finished in "+(System.currentTimeMillis()-b4)+" ms");
 		br.close();
 		bw.close();
+	}
+
+	private static GraphLeaningResult leanGraph(Collection<Node[]> data, CallbackNxBufferedWriter cb) throws InterruptedException {
+		DFSGraphLeaning dfs = new DFSGraphLeaning(data);
+		LOG.info("Running leaning ...");
+		GraphLeaningResult glr = dfs.call();
+		LOG.info("... done.");
+		
+		LOG.info("Number of input bnodes "+glr.getCoreMap().size());
+		LOG.info("Depth "+glr.getDepth());
+		LOG.info("Number of joins "+glr.getJoins());
+		LOG.info("Core endomorphism (witness mapping) "+glr.getCoreMap());
+		return glr;
 	}
 
 	/**
@@ -226,64 +300,38 @@ public class LabelRDFGraph {
 	 * @param cla - The options for running the labelling
 	 * @param prefix - Any prefix to be prepended to the label (e.g., a skolem prefix)
 	 * @param writeBnode - Writes bnodes if true, otherwise writes URIs
+	 * @throws HashCollisionException 
+	 * @throws InterruptedException 
 	 * 
 	 * @returns null if no blank nodes in graph, otherwise returns an object with the details of the colouring process (including, e.g., a unique hash) 
 	 */
-	public static final GraphLabellingResult labelGraph(Iterator<Node[]> in, Callback out, GraphLabellingArgs cla, String prefix, boolean writeBnode){
-		// load the graph into memory
-		ArrayList<Node[]> stmts = new ArrayList<Node[]>();
-		boolean bnode = false;
-		while(in.hasNext()){
-			Node[] triple = in.next();
-			if(triple.length>=3){
-				stmts.add(new Node[]{triple[0], triple[1], triple[2]});
-				bnode = bnode | (triple[0] instanceof BNode) | (triple[2] instanceof BNode);
-			} else{
-				LOG.warning("Not a triple "+Nodes.toN3(triple));
-			}
+	public static final GraphLabellingResult labelGraph(Collection<Node[]> stmts, Callback out, GraphLabellingArgs cla, String prefix, boolean writeBnode) throws InterruptedException, HashCollisionException{
+		// create a new labeler
+		GraphLabelling cl = new GraphLabelling(stmts,cla);
+
+		LOG.info("Running labelling ...");
+		GraphLabellingResult clr = cl.call();
+		LOG.info("... done.");
+
+		LOG.info("Number of blank nodes: "+clr.getBnodeCount());
+		LOG.info("Number of partitions: "+clr.getPartitionCount());
+		LOG.info("Number of colour iterations: "+clr.getColourIterationCount());
+		LOG.info("Number of leafs: "+clr.getLeafCount());
+		LOG.info("Graph hash: "+clr.getHashGraph().getGraphHash());
+
+		// the canonical labeling writes blank node using hashes w/o prefix
+		// this code adds the prefix and maps them to URIs or blank nodes
+		// as specified in the options
+		LOG.info("Writing output ...");
+		int written = 0;
+		TreeSet<Node[]> canonicalGraph = clr.getGraph();
+		GraphLabelIterator gli = new GraphLabelIterator(canonicalGraph.iterator(), prefix, writeBnode);
+		while(gli.hasNext()){
+			out.processStatement(gli.next());
+			written ++;
 		}
-		LOG.info("Loaded "+stmts.size()+" triples");
+		LOG.info("... written "+written+" statements.");
 
-		GraphLabellingResult clr = null;
-
-		if(!bnode){
-			LOG.info("No bnodes ... buffering triple input to output");
-			for(Node[] triple:stmts){
-				out.processStatement(triple);
-			}
-		} else{
-			// create a new labeler
-			GraphLabelling cl = new GraphLabelling(stmts,cla);
-
-			try{
-				LOG.info("Running labelling ...");
-				clr = cl.call();
-				LOG.info("... done.");
-
-				LOG.info("Number of blank nodes: "+clr.getBnodeCount());
-				LOG.info("Number of partitions: "+clr.getPartitionCount());
-				LOG.info("Number of colour iterations: "+clr.getColourIterationCount());
-				LOG.info("Number of leafs: "+clr.getLeafCount());
-				LOG.info("Graph hash: "+clr.getHashGraph().getGraphHash());
-
-				// the canonical labeling writes blank node using hashes w/o prefix
-				// this code adds the prefix and maps them to URIs or blank nodes
-				// as specified in the options
-				LOG.info("Writing output ...");
-				int written = 0;
-				TreeSet<Node[]> canonicalGraph = clr.getGraph();
-				GraphLabelIterator gli = new GraphLabelIterator(canonicalGraph.iterator(), prefix, writeBnode);
-				while(gli.hasNext()){
-					out.processStatement(gli.next());
-					written ++;
-				}
-				LOG.info("... written "+written+" statements.");
-			} catch(Exception e){
-				LOG.severe(e.getMessage());
-				e.printStackTrace();
-			}
-
-		}
 		return clr;
 	}
 
