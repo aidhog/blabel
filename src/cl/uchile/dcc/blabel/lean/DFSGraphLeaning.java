@@ -156,8 +156,9 @@ public class DFSGraphLeaning extends GraphLeaning{
 		HashMap<StaticArrayList<Integer>,ArrayList<Node>> partition = null;
 		int checked = 0;
 		
-		// we only prune if some term is bound
-		if(prune && bindings.getOutput().size()>=1){
+		// we only prune if one term is bound
+		// the case for two terms is awkward :(
+		if(prune && bindings.getOutput().size()==1){
 			o = new Orbits();
 			visited = new TreeSet<Node>();
 			indexes = new HashMap<BNode,Integer>();
@@ -170,11 +171,11 @@ public class DFSGraphLeaning extends GraphLeaning{
 				indexes.put(b, i++);
 			}
 			
-			// if two terms are bound, we'll arbitrarily 
-			// consider the second one fixed
-			if(bindings.getOutput().size()>1){
-				indexes.put(bindings.getOutput().get(1),i++);
-			}
+//			// if two terms are bound, we'll arbitrarily 
+//			// consider the second one fixed
+//			if(bindings.getOutput().size()>1){
+//				indexes.put(bindings.getOutput().get(1),i++);
+//			}
 			
 			// only store one solution per rooted signature
 			// ... will compose orbits from individual pairs
@@ -186,10 +187,10 @@ public class DFSGraphLeaning extends GraphLeaning{
 			// this branch according to automorphisms
 			
 			// we should only check if
-			// (1) at least one term is actually bound
+			// (1) precisely one term is bound
 			// (2) binding constant is not in partialSol (i.e., this is an automorphism we're trying)
 			// (3) we have something previous to map to
-			if(prune && bindings.getOutput().size()>=1 && !visited.isEmpty() && automorphisms!=null && automorphisms.size()>1 && !partialSol.containsKey(bind[0])){
+			if(prune && bindings.getOutput().size()==1 && !visited.isEmpty() && automorphisms!=null && automorphisms.size()>1 && !partialSol.containsKey(bind[0])){
 //				System.err.println("Trying to prune");
 //				System.err.println(automorphismMask);
 //				for(ArrayList<Node> auto:automorphisms)
@@ -249,6 +250,8 @@ public class DFSGraphLeaning extends GraphLeaning{
 					continue;
 				}
 			} else if(prune && bindings.getOutput().size()==1 && !partialSol.containsKey(bind[0])){
+				// even if conditions for pruning are met, we need
+				// to keep track of which siblings we've visited
 				visited.add(bind[0]);
 			}
 			
@@ -379,7 +382,7 @@ public class DFSGraphLeaning extends GraphLeaning{
 	}
 		
 	public static void main(String[] args) throws Exception{
-		BufferedReader br = new BufferedReader(new FileReader("data/5clique.nt"));
+		BufferedReader br = new BufferedReader(new FileReader("data/k-9.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/4clique.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/square.nt"));
@@ -398,7 +401,7 @@ public class DFSGraphLeaning extends GraphLeaning{
 		
 		br.close();
 		
-		DFSGraphLeaning gl = new DFSGraphLeaning(triples,false,true);
+		DFSGraphLeaning gl = new DFSGraphLeaning(triples,false,false);
 		
 		GraphLeaningResult glr = gl.call();
 		

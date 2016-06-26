@@ -79,7 +79,7 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 	protected Count<Node> predCard;
 
 	// number of joins performed [for statistics]
-	protected int joins = 0;
+	protected long joins = 0;
 
 	// dummy blank node used for
 	// ground edges where value is a
@@ -978,9 +978,9 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 	public static class GraphLeaningResult{
 		protected Collection<Node[]> leanData;
 		protected HashMap<BNode,Node> coreMap;
-		protected int joins;
+		protected long joins;
 		protected int depth;
-		protected int solCount;
+		protected long solCount;
 
 		GraphLeaningResult(Collection<Node[]> leanData){
 			this.leanData = leanData;
@@ -1006,11 +1006,11 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 			this.coreMap = coreMap;
 		}
 
-		public int getJoins() {
+		public long getJoins() {
 			return joins;
 		}
 
-		public void setJoins(int joins) {
+		public void setJoins(long joins) {
 			this.joins = joins;
 		}
 
@@ -1022,11 +1022,11 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 			this.depth = depth;
 		}
 
-		public int getSolutionCount() {
+		public long getSolutionCount() {
 			return solCount;
 		}
 
-		public void setSolutionCount(int solCount) {
+		public void setSolutionCount(long solCount) {
 			this.solCount = solCount;
 		}
 	}

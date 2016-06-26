@@ -96,7 +96,11 @@ public class RunSyntheticEvaluation {
 		Option bO = new Option("b", "benchmark to run: "+BENCHMARK_OPTIONS+" ("+Benchmark.TEST.toString()+" ignores other options)");
 		bO.setArgs(1);
 		bO.setRequired(true);
-
+		
+		Option nleanO = new Option("nlean", "no pruning by automorphism in DFS leaning (only enable for testing)");
+		
+		Option nlabelO = new Option("nlabel", "no pruning by automorphism in labelling (only enable for testing)");
+		
 		Option helpO = new Option("h", "print help");
 
 		Options options = new Options();
@@ -107,6 +111,8 @@ public class RunSyntheticEvaluation {
 		options.addOption(rO);
 		options.addOption(tO);
 		options.addOption(bO);
+		options.addOption(nleanO);
+		options.addOption(nlabelO);
 		options.addOption(helpO);
 
 		CommandLineParser parser = new BasicParser();
@@ -144,6 +150,9 @@ public class RunSyntheticEvaluation {
 		}
 		
 		boolean randomiseDfs = cmd.hasOption("r");
+		
+		boolean noPruneLean = cmd.hasOption("nlean");
+		boolean noPruneLabel = cmd.hasOption("nlabel");
 		
 		HashFunction hf = null;
 		int s = -1;
@@ -190,8 +199,8 @@ public class RunSyntheticEvaluation {
 				if(bench.equals(Benchmark.LEAN) || bench.equals(Benchmark.BOTH)){
 					GraphLeaning gl = null;
 					if(l==0){
-						LOG.info("Running DFS leaning algorithm, random: "+randomiseDfs);
-						gl = new DFSGraphLeaning(data,randomiseDfs);
+						LOG.info("Running DFS leaning algorithm, random: "+randomiseDfs+" prune: "+!noPruneLean);
+						gl = new DFSGraphLeaning(data,randomiseDfs,!noPruneLean);
 					} else if(l==1) {
 						LOG.info("Running BFS leaning algorithm");
 						gl = new BFSGraphLeaning(data);
@@ -231,6 +240,7 @@ public class RunSyntheticEvaluation {
 				if(!fail && (bench.equals(Benchmark.LABEL) || bench.equals(Benchmark.BOTH))){
 					GraphLabellingArgs cla = new GraphLabellingArgs();
 					cla.setHashFunction(hf);
+					cla.setPrune(!noPruneLabel);
 					
 					GraphLabelling cl = new GraphLabelling(data,cla);
 					
@@ -239,7 +249,7 @@ public class RunSyntheticEvaluation {
 
 			        long b4 = System.currentTimeMillis();
 			        try {
-			            LOG.info("Running labelling ...");
+			            LOG.info("Running labelling prune: "+!noPruneLabel);
 			            GraphLabellingResult clr = future.get(timeout, TimeUnit.SECONDS);
 			            LOG.info("... finished!");
 			            
