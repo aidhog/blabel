@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="skolem" basedir="." default="dist">
-   <property name="name" value="skolem" />
+<project name="blabel" basedir="." default="dist">
+   <property name="name" value="blabel" />
    <property name="src" value="src" />
    <property name="version" value="" />
    <property name="dist" value="dist" />

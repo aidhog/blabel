@@ -83,20 +83,16 @@ public class BFSGraphLeaning extends GraphLeaning{
 		ArrayList<HashMap<BNode,Node>> nextPartialSols = new ArrayList<HashMap<BNode,Node>>();
 		Node[] current = todo.remove(0);
 		
-		if (Thread.interrupted()) {
-			throw new InterruptedException();
-		}
-		
+
 		for(HashMap<BNode,Node> partialSol:partialSols){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
 			joins++;
 			Bindings bindings = getBindings(current,partialSol);
 			
 			if(bindings.getBindings()==null){
 				continue;
-			}
-			
-			if (Thread.interrupted()) {
-				throw new InterruptedException();
 			}
 			
 			for(Node[] bind : bindings.getBindings()){
@@ -110,6 +106,9 @@ public class BFSGraphLeaning extends GraphLeaning{
 	
 				// update the inputs with new bindings
 				for(int i=0; i<bindings.getOutput().size(); i++){
+					if (Thread.interrupted()) {
+						throw new InterruptedException();
+					}
 					nextPartialSol.put(bindings.getOutput().get(i),bind[i]);
 				}
 				

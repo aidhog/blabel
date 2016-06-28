@@ -1,23 +1,28 @@
 package cl.uchile.dcc.blabel.label;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 
 import org.semanticweb.yars.nx.BNode;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.NodeComparator;
-
-import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
-import cl.uchile.dcc.blabel.label.util.HashGraph;
-import cl.uchile.dcc.blabel.label.GraphColouring.GraphResult;
-import cl.uchile.dcc.blabel.label.GraphColouring.HashCollisionException;
+import org.semanticweb.yars.nx.Nodes;
+import org.semanticweb.yars.nx.parser.NxParser;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+
+import cl.uchile.dcc.blabel.label.GraphColouring.GraphResult;
+import cl.uchile.dcc.blabel.label.GraphColouring.HashCollisionException;
+import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
+import cl.uchile.dcc.blabel.label.util.HashGraph;
 
 /**
  * Main class wrapping an interface for the underlying classes. Takes care
@@ -62,7 +67,7 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 
 		// then get out the partitions
 		Collection<HashGraph> bnps = hg.blankNodePartition();
-		HashMap<HashCode,Integer> graphs = new HashMap<HashCode,Integer>();
+		TreeMap<TreeSet<Node[]>,Integer> graphs = new TreeMap<TreeSet<Node[]>,Integer>(GraphColouring.GRAPH_COMP);
 		int totalColourIters = 0;
 		int leaves = 0;
 		
@@ -71,10 +76,17 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 		
 		ArrayList<HashCode> hashes = new ArrayList<HashCode>();
 		
+		// the count of bnodes that should be in the output
+		int uniqueBnodes = 0;
+		
 		// more efficient to split the graph
 		// per connected blank nodes and merge
 		// the results afterwards
 		for(HashGraph bnp:bnps){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			// run the colouring for each partition
 			GraphColouring gc = new GraphColouring(bnp,args.prune);
 			gc.execute();
@@ -82,22 +94,27 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 			// get the canonical graph for the partition
 			GraphResult ghp = gc.getCanonicalGraph();
 			
+			// get the mapped data
+			TreeSet<Node[]> mapped = ghp.getGraph();
 			
 			// make sure the graph has not been seen before
-			Integer count = graphs.get(ghp.getHash());
+			Integer count = graphs.get(mapped);
 			if(count==null){
 				// if so, increment count
-				graphs.put(ghp.getHash(),1);
+				graphs.put(mapped,1);
 				hashes.add(ghp.getHash());
+				uniqueBnodes += ghp.getHashGraph().getBlankNodeHashes().size();
 			} else{
 				// if not, mux the count into the blank node hashes
 				// to avoid overwriting
 				// a little inefficient to mux again but very rare case ...
 				// two (or more) isomorphic bnps in one document
-				graphs.put(ghp.getHash(),count+1);
+				graphs.put(mapped,count+1);
 				if(args.dip){
 					ghp = gc.getCanonicalGraph(count+1);
+					mapped = ghp.getGraph();
 					hashes.add(ghp.getHash());
+					uniqueBnodes += ghp.getHashGraph().getBlankNodeHashes().size();
 				}
 			}
 			
@@ -106,12 +123,13 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 			leaves += gc.getLeaves().size();
 			
 			// collect all triples and hashes
-			fullGraph.addAll(ghp.getGraph());
+			fullGraph.addAll(mapped);
 			
 			
 			// update the bnodes in the original full graph
 			hg.updateBNodeHashes(ghp.getHashGraph().getBlankNodeHashes());
 		}
+		
 		
 		// will store a unique graph-level hash
 		HashCode ghash = null;
@@ -150,6 +168,15 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 			}
 		}
 		
+		// just check that we don't have a hash collision
+		HashSet<HashCode> checkHashes = new HashSet<HashCode>();
+		checkHashes.addAll(hg.getBlankNodeHashes().values());
+		if(checkHashes.size()!=uniqueBnodes){
+			throw new HashCollisionException("We've produced a hash collision ("+uniqueBnodes+":"+checkHashes.size()+"): "+hg.getBlankNodeHashes());
+		}
+		
+		
+		
 		
 		// fill the data and stats into the result object
 		GraphLabellingResult clr = new GraphLabellingResult();
@@ -167,7 +194,7 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 	public static class GraphLabellingArgs{
 		public static HashFunction DEFAULT_HASHING = Hashing.md5();
 		public static boolean DISTINGUISH_ISO_PARTITIONS = true;
-		public static boolean UNIQUE_PER_GRAPH = true;
+		public static boolean DEFAULT_UNIQUE_PER_GRAPH = true;
 		public static boolean DEFAULT_PRUNE = true;
 		
 		// the hashing function to use
@@ -179,7 +206,7 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 		
 		// if false, mux with a partition level hash
 		// if true, mux with a graph level hash
-		private boolean upg = UNIQUE_PER_GRAPH;
+		private boolean upg = DEFAULT_UNIQUE_PER_GRAPH;
 		
 		// if false, do not prune by automorphisms
 		// if true, prune by automorphisms
@@ -390,5 +417,79 @@ public class GraphLabelling implements Callable<GraphLabellingResult> {
 		private void setLeafCount(int leafCount) {
 			this.leafCount = leafCount;
 		}
+	}
+	
+	
+	public static void main(String[] args) throws Exception{
+		BufferedReader br = new BufferedReader(new FileReader("data/btc-err/label/input_shuffle_0.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/4clique.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/square.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/saramandai.nq"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/null-test2.nt"));
+//		BufferedReader br = new BufferedReader(new FileReader("data/timeout.nt"));
+		NxParser nxp = new NxParser(br);
+		
+
+		TreeSet<Node[]> triples = new TreeSet<Node[]>(NodeComparator.NC);
+		
+		while(nxp.hasNext()){
+			Node[] triple = nxp.next();
+			triples.add(new Node[]{triple[0],triple[1],triple[2]});
+		}
+		
+		br.close();
+		
+		GraphLabellingArgs gla = new GraphLabellingArgs();
+		gla.setDistinguishIsoPartitions(false);
+		GraphLabelling gl = new GraphLabelling(triples,gla);
+		
+		GraphLabellingResult glr = gl.call();
+		
+//		for(Node[] leanTriple: glr.leanData){
+//			System.err.println(Nodes.toN3(leanTriple));
+//		}
+		
+		System.err.println(glr.bnodeCount);
+		System.err.println(glr.colourIterationCount);
+		System.err.println(glr.leafCount);
+		System.err.println(glr.partitionCount);
+		System.err.println(glr.getGraph().size());
+		
+		for(Node[] out:glr.getGraph()){
+			System.err.println(Nodes.toN3(out));
+		}
+		
+		
+
+//		TreeSet<BNode> notEqual = new TreeSet<BNode>();
+//		if(glr.coreMap!=null){
+//			for(Map.Entry<BNode, Node> e:glr.coreMap.entrySet()){
+//				if(!e.getKey().equals(e.getValue())){
+//					if(e.getValue() instanceof BNode){
+//						notEqual.add((BNode)e.getValue());
+//					}
+//					System.err.println(e);
+//				}
+//			}
+//			
+////			for(Node n:notEqual){
+////				if(!glr.coreMap.get(n).equals(n)){
+////					System.err.println("Not transitively closed "+n+" "+glr.getCoreMap().get(n));
+////				}
+////			}
+//		}
+		
+//		for(Node[] a:triples){
+//			if(!glr.leanData.contains(a)){
+//				System.err.println("Removed "+Nodes.toN3(a));
+//			}
+//		}
+//		
+//		for(Node[] a:glr.leanData){
+//			if(!triples.contains(a)){
+//				System.err.println("Oh oh "+Nodes.toN3(a));
+//			}
+//		}
 	}
 }

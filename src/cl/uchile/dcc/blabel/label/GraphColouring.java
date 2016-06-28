@@ -155,6 +155,8 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 			// mux the combined hashcode
 			HashGraph.muxHash(clone, comb);
 			
+//			System.err.println(clone);
+			
 			// compute final graph
 			TreeSet<Node[]> labelled = GraphColouring.labelBlankNodes(clone);
 
@@ -263,8 +265,9 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 	 * 
 	 * @param next
 	 * @return
+	 * @throws InterruptedException 
 	 */
-	private boolean pruneSibling(Node next, ArrayList<Node> visited, Orbits o){
+	private boolean pruneSibling(Node next, ArrayList<Node> visited, Orbits o) throws InterruptedException{
 		if(visited==null || visited.size()==0)
 			return false;
 		
@@ -296,11 +299,19 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 		// once another colouring is found with same indexes, create the
 		// automorphism and add it to an orbit
 		for(Map.Entry<TreeSet<Node[]>,ArrayList<GraphColouring>> iso:leaves.entrySet()){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			HashMap<ArrayList<Integer>,GraphColouring> rooted = new HashMap<ArrayList<Integer>,GraphColouring>();
 			
 			// for all the final colourings that produce the
 			// same RDF graph
 			for(GraphColouring gc:iso.getValue()){
+				if (Thread.interrupted()) {
+					throw new InterruptedException();
+				}
+				
 				// we will get the indexes of the current path nodes 
 				// in the refined partition of that final colouring
 				//
@@ -492,6 +503,10 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 			LOG.finer("Running colouring iteration "+r);
 
 			for(Node[] trip:data){
+				
+				if (Thread.interrupted()) {
+					throw new InterruptedException();
+				}
 
 				// avoid looking up the hashcode
 				// twice for each order
@@ -554,6 +569,10 @@ public class GraphColouring implements Callable<GraphColouring.GraphResult> {
 			HashMap<HashCode,Integer> oldRank = new HashMap<HashCode,Integer>();
 			int i = 0;
 			do{
+				if (Thread.interrupted()) {
+					throw new InterruptedException();
+				}
+				
 				col.clear();
 				
 				for(Map.Entry<HashCode,TreeSet<Node>> np:newpart.entrySet()){

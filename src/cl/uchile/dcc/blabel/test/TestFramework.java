@@ -33,6 +33,7 @@ import com.sun.istack.internal.logging.Logger;
 
 import cl.uchile.dcc.blabel.cli.RunNQuadsTest;
 import cl.uchile.dcc.blabel.label.GraphColouring;
+import cl.uchile.dcc.blabel.label.GraphColouring.HashCollisionException;
 import cl.uchile.dcc.blabel.label.GraphLabelling;
 import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingArgs;
 import cl.uchile.dcc.blabel.label.GraphLabelling.GraphLabellingResult;
@@ -94,6 +95,9 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		TreeMap<TreeSet<Node[]>,TreeSet<String>> labellingComparisons = new TreeMap<TreeSet<Node[]>,TreeSet<String>>(GraphColouring.GRAPH_COMP);
 		TreeSet<String> labellingExceptions = new TreeSet<String>();
 		
+		// for hash collisions on blank nodes
+		TreeSet<String> labellingHashCollisions = new TreeSet<String>();
+		
 		ArrayList<ArrayList<Node[]>> inputs = new ArrayList<ArrayList<Node[]>>();
 		for(int i=0; i<tfa.shuffles; i++){
 			ArrayList<Node[]> data = new ArrayList<Node[]>();
@@ -106,17 +110,18 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 			
 			// compare with pruning and without
 			tfa.getLabellingArgs().setPrune(true);
-			testLabel(data,tfa.getLabellingArgs(),tfa,LABEL_TEST+"i:"+i,labellingComparisons,labellingExceptions);
+			testLabel(data,tfa.getLabellingArgs(),tfa,LABEL_TEST+"i:"+i,labellingComparisons,labellingExceptions,labellingHashCollisions);
 			
 			tfa.getLabellingArgs().setPrune(false);
-			testLabel(data,tfa.getLabellingArgs(),tfa,LABEL_NO_PRUNING_TEST+"i:"+i,labellingComparisons,labellingExceptions);
+			testLabel(data,tfa.getLabellingArgs(),tfa,LABEL_NO_PRUNING_TEST+"i:"+i,labellingComparisons,labellingExceptions,labellingHashCollisions);
 		}
 		tfr.setLabellingComparisons(labellingComparisons);
 		tfr.setLabellingExceptions(labellingExceptions);
+		tfr.setLabellingHashCollisions(labellingHashCollisions);
 		
 		// write inputs/outputs if needed
 		if(tfa.getSaveToDirectory()!=null && !tfa.getSaveLevel().equals(SaveLevel.NONE)){
-			saveInputsOutputs(labellingComparisons, LABEL_SUBDIR, inputs, labellingExceptions, null, tfa);
+			saveInputsOutputs(labellingComparisons, LABEL_SUBDIR, inputs, labellingExceptions, labellingHashCollisions, null, tfa);
 		}
 		
 		// TEST 2: compare leaning results
@@ -129,7 +134,11 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		// for errors where map does not give lean output
 		// or is not complete
 		TreeSet<String> mappingsFailures = new TreeSet<String>();
+		// for hash collisions on blank nodes
+		TreeSet<String> leaningHashCollisions = new TreeSet<String>();
+		
 		inputs.clear();
+
 		for(int i=0; i<tfa.shuffles; i++){
 			ArrayList<Node[]> data = new ArrayList<Node[]>();
 			if(i==0){
@@ -139,40 +148,45 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 			}
 			inputs.add(data);
 			
-			testLeanAndLabel(data,DFS_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
-			testLeanAndLabel(data,DFS_NOPRUNE_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
-			testLeanAndLabel(data,DFS_RANDOM_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
-			testLeanAndLabel(data,DFS_RANDOM_NOPRUNE_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
-			testLeanAndLabel(data,BFS_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,true);
+			testLeanAndLabel(data,DFS_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,leaningHashCollisions,true);
+			testLeanAndLabel(data,DFS_NOPRUNE_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,leaningHashCollisions,true);
+			testLeanAndLabel(data,DFS_RANDOM_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,leaningHashCollisions,true);
+			testLeanAndLabel(data,DFS_RANDOM_NOPRUNE_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,leaningHashCollisions,true);
+			testLeanAndLabel(data,BFS_TEST+"i:"+i,tfa,leaningComparisons,leaningExceptions,mappingsFailures,leaningHashCollisions,true);
 		}
+		
 		tfr.setLeaningComparisons(leaningComparisons);
 		tfr.setLeaningExceptions(leaningExceptions);
 		tfr.setMappingsFailures(mappingsFailures);
+		tfr.setLeaningHashCollisions(leaningHashCollisions);
 		
 		// write inputs/outputs if needed
 		if(tfa.getSaveToDirectory()!=null && !tfa.getSaveLevel().equals(SaveLevel.NONE)){
-			saveInputsOutputs(leaningComparisons, LEAN_SUBDIR, inputs, leaningExceptions, mappingsFailures, tfa);
+			saveInputsOutputs(leaningComparisons, LEAN_SUBDIR, inputs, leaningExceptions, leaningHashCollisions, mappingsFailures, tfa);
 		}
 		return tfr;
 	}
 	
-	private static void saveInputsOutputs(TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, String subdir, ArrayList<ArrayList<Node[]>> inputs, TreeSet<String> exceptions, TreeSet<String> mappingExceptions, TestFrameworkArgs tfa) throws IOException{
+	private static void saveInputsOutputs(TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, String subdir, ArrayList<ArrayList<Node[]>> inputs, TreeSet<String> exceptions, TreeSet<String> hashCollisions, TreeSet<String> mappingExceptions, TestFrameworkArgs tfa) throws IOException{
 		// write inputs/outputs if needed
 		
-		boolean error = comparisons.size() > 1 || (mappingExceptions!=null && !mappingExceptions.isEmpty());
-		boolean exception = exceptions.isEmpty();
+		boolean error = comparisons.size() > 1 || (mappingExceptions!=null && !mappingExceptions.isEmpty()) || (hashCollisions!=null && !hashCollisions.isEmpty());
+		boolean exception = !exceptions.isEmpty();
 		if(tfa.getSaveLevel().equals(SaveLevel.ALL) || error || (tfa.getSaveLevel().equals(SaveLevel.ONLY_ERROR_OR_EXCEPTION) && exception)){
 			String dir = tfa.getSaveToDirectory()+"/"+subdir+"/";
 			mkdirs(dir);
 			BufferedWriter readme = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(dir+"/"+README_FILENAME),"utf-8"));
 
-			readme.write("Exceptions "+exceptions+"\n");
-			readme.write("Partition sizes "+comparisons.size()+"\n");
+			readme.write("Exceptions:\t"+exceptions+"\n");
+			readme.write("Partition size:\t"+comparisons.size()+"\n");
 			if(comparisons.size()>1){
-				readme.write("Partitions: "+comparisons.values()+"\n");
+				readme.write("Partitions:\t"+comparisons.values()+"\n");
 			}
 			if(mappingExceptions!=null){
-				readme.write("Mapping Exceptions "+mappingExceptions+"\n");
+				readme.write("Mapping Exceptions:\t"+mappingExceptions+"\n");
+			}
+			if(hashCollisions!=null){
+				readme.write("Hash Collisions:\t"+hashCollisions+"\n");
 			}
 			readme.close();
 
@@ -190,7 +204,7 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 	}
 	
 	public static boolean testLabel(Collection<Node[]> data, GraphLabellingArgs la, TestFrameworkArgs tfa, String testname,
-			TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, TreeSet<String> exceptions) throws InterruptedException {
+			TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, TreeSet<String> exceptions, TreeSet<String> labellingHashCollisions) throws InterruptedException {
 		if (Thread.interrupted()) {
 			throw new InterruptedException();
 		}
@@ -200,8 +214,17 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		GraphLabellingResult lr = null;
 		try{
 			lr = run(l,tfa.timeout);
+		} catch(InterruptedException e){
+			throw new InterruptedException();
+		} catch(ExecutionException e){
+			if(e.getCause() instanceof HashCollisionException){
+				labellingHashCollisions.add(testname+"_lean");
+			} else{
+				exceptions.add(testname+"_lean");
+			}
+			return false;
 		} catch(Exception e){
-			exceptions.add(testname);
+			exceptions.add(testname+"_lean");
 			return false;
 		}
 		
@@ -218,7 +241,7 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		return true;
 	}
 	
-	public static boolean testLeanAndLabel(Collection<Node[]> data, String testname, TestFrameworkArgs tfa, TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, TreeSet<String> exceptions, TreeSet<String> mappingsFailures, boolean recurse) throws InterruptedException, ExecutionException, TimeoutException{
+	public static boolean testLeanAndLabel(Collection<Node[]> data, String testname, TestFrameworkArgs tfa, TreeMap<TreeSet<Node[]>, TreeSet<String>> comparisons, TreeSet<String> exceptions, TreeSet<String> mappingsFailures, TreeSet<String> hashCollisions, boolean recurse) throws InterruptedException, ExecutionException, TimeoutException{
 		if (Thread.interrupted()) {
 			throw new InterruptedException();
 		}
@@ -240,6 +263,15 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		GraphLeaningResult glr = null;
 		try{
 			glr = run(gl,tfa.timeout);
+		} catch(InterruptedException e){
+			throw new InterruptedException();
+		} catch(ExecutionException e){
+			if(e.getCause() instanceof HashCollisionException){
+				hashCollisions.add(testname+"_lean");
+			} else{
+				exceptions.add(testname+"_lean");
+			}
+			return false;
 		} catch(Exception e){
 			exceptions.add(testname+"_lean");
 			return false;
@@ -248,18 +280,18 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		testMapping(data,glr.getLeanData(),glr.getCoreMap(),testname,mappingsFailures);
 
 		// compute canonical labelling of result
-		testLabel(glr.getLeanData(),tfa.getLabellingArgs(),tfa,testname+"_label",comparisons,exceptions);
+		testLabel(glr.getLeanData(),tfa.getLabellingArgs(),tfa,testname+"_label",comparisons,exceptions,hashCollisions);
 		
 		// tests to see if result of leaning again
 		// is the same
 		if(recurse){
-			return testLeanAndLabel(glr.getLeanData(), testname+"+depth2", tfa, comparisons, exceptions, mappingsFailures, false);
+			return testLeanAndLabel(glr.getLeanData(), testname+"+depth2", tfa, comparisons, exceptions, mappingsFailures, hashCollisions, false);
 		}
 		
 		return true;
 	}
 	
-	private static void testMapping(Collection<Node[]> data, Collection<Node[]> leanData, Map<BNode, Node> coreMap, String testname, TreeSet<String> mappingsFailures) {
+	private static void testMapping(Collection<Node[]> data, Collection<Node[]> leanData, Map<BNode, Node> coreMap, String testname, TreeSet<String> mappingsFailures) throws InterruptedException {
 		if(getBnodes(data).size()!=coreMap.size()){
 			mappingsFailures.add(testname);
 		} else{
@@ -333,6 +365,8 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		TreeMap<TreeSet<Node[]>,TreeSet<String>> leaningComparisons;
 		TreeSet<String> leaningExceptions;
 		TreeSet<String> mappingsFailures;
+		TreeSet<String> leaningHashCollisions;
+		TreeSet<String> labellingHashCollisions;
 		
 		
 		public TestFrameworkResult(){
@@ -387,6 +421,26 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 
 		public void setMappingsFailures(TreeSet<String> mappingsFailures) {
 			this.mappingsFailures = mappingsFailures;
+		}
+
+
+		public TreeSet<String> getLeaningHashCollisions() {
+			return leaningHashCollisions;
+		}
+
+
+		public void setLeaningHashCollisions(TreeSet<String> leaningHashCollisions) {
+			this.leaningHashCollisions = leaningHashCollisions;
+		}
+
+
+		public TreeSet<String> getLabellingHashCollisions() {
+			return labellingHashCollisions;
+		}
+
+
+		public void setLabellingHashCollisions(TreeSet<String> labellingHashCollisions) {
+			this.labellingHashCollisions = labellingHashCollisions;
 		}
 	}
 	

@@ -109,8 +109,6 @@ public class RunNQuadsTest {
 		Option eO = new Option("e", "write exception graphs to this directory (optional)");
 		eO.setArgs(1);
 		
-		Option errO = new Option("err", "if running test framework, only write confirmed errors, not exceptions");
-		
 		Option bO = new Option("b", "select the process to run: "+RunSyntheticEvaluation.BENCHMARK_OPTIONS);
 		bO.setArgs(1);
 		bO.setRequired(true);
@@ -125,7 +123,6 @@ public class RunNQuadsTest {
 		options.addOption(bO);
 		options.addOption(tO);
 		options.addOption(eO);
-		options.addOption(errO);
 		options.addOption(nlabelO);
 		options.addOption(nleanO);
 		options.addOption(helpO);
@@ -166,9 +163,6 @@ public class RunNQuadsTest {
 		
 		String exceptionDir = cmd.getOptionValue("e");
 		if(exceptionDir!=null) new File(exceptionDir).mkdirs();
-		
-		// print only errors, not exceptions, in test framewoek
-		boolean err = cmd.hasOption("err");
 		
 		HashFunction hf = null;
 		int s = -1;
@@ -317,7 +311,7 @@ public class RunNQuadsTest {
 					        	bnodeCount = leanBnodeCount;
 					        }
 				        } catch (Exception e) {
-				        	System.out.println("LEAN\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+				        	System.out.println("LEAN\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName()+"\t"+e.getCause());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 				        	LOG.warning(e.getClass().getName()+": "+e.getMessage());
 				        	writeToDir(exceptionDir,old,"LEAN",data);
 				        	fail = true;
@@ -356,7 +350,7 @@ public class RunNQuadsTest {
 					        	dupes.add(old);
 					        }
 				        } catch (Exception e) {
-				        	System.out.println("LABEL\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+				        	System.out.println("LABEL\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName()+"\t"+e.getCause());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 				        	LOG.warning(e.getClass().getName()+": "+e.getMessage());
 				        	writeToDir(exceptionDir,old,"LABEL",data);
 				        	fail = true;
@@ -368,12 +362,8 @@ public class RunNQuadsTest {
 					if(bench.equals(Benchmark.TEST)){
 						TestFrameworkArgs tfa = new TestFrameworkArgs();
 						if(exceptionDir!=null){
-							tfa.setSaveToDirectory(exceptionDir);
-							if(err){
-								tfa.setSaveLevel(SaveLevel.ONLY_ERROR);
-							} else{
-								tfa.setSaveLevel(SaveLevel.ONLY_ERROR_OR_EXCEPTION);
-							}
+							tfa.setSaveToDirectory(exceptionDir+"/"+URLEncoder.encode(old.toString(),ENCODING)+"/");
+							tfa.setSaveLevel(SaveLevel.ONLY_ERROR);
 						}
 						
 						TestFramework tf = new TestFramework(data,tfa);
@@ -387,9 +377,12 @@ public class RunNQuadsTest {
 				            TestFrameworkResult tfr = future.get(timeout, TimeUnit.SECONDS);
 				            LOG.info("... finished!");
 				            
-				            String message = "TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t";
+				            long runtime = System.currentTimeMillis()-b4l;
+				            duration += runtime;
 				            
-				            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty()){
+				            String message = "TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+runtime+"\t";
+				            
+				            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty() && tfr.getLabellingHashCollisions().isEmpty() && tfr.getLeaningHashCollisions().isEmpty()){
 				            	// no explicit error found
 				            	// but possible that tests timed out
 				            	// or otherwise failed to run
@@ -405,7 +398,12 @@ public class RunNQuadsTest {
 				            	if(!tfr.getMappingsFailures().isEmpty()){
 				            		message += "\tMAPPING_FAILURES\t"+tfr.getMappingsFailures();
 				            	}
-				            	
+				            	if(!tfr.getLabellingHashCollisions().isEmpty()){
+				            		message += "\tLABELLING_COLLISIONS\t"+tfr.getLabellingHashCollisions();
+				            	}
+				            	if(!tfr.getLabellingHashCollisions().isEmpty()){
+				            		message += "\tLEANING_COLLISIONS\t"+tfr.getLeaningHashCollisions();
+				            	}
 				            }
 				            if(!tfr.getLabellingExceptions().isEmpty() || !tfr.getLeaningExceptions().isEmpty()){
 			            		message += "\tPARTIAL";
@@ -417,11 +415,9 @@ public class RunNQuadsTest {
 				            
 				            System.out.println(message);
 				        } catch (Exception e) {
-				        	LOG.info(e.getClass().getName()+" "+e.getMessage());
-				        	System.out.println("TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());
-				        	if(!err){
-				        		writeToDir(exceptionDir,old,"TEST",data);
-				        	}
+				        	LOG.warning(e.getClass().getName()+" "+e.getMessage());
+				        	System.out.println("TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4l)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName()+"\t"+e.getCause());
+			        		writeToDir(exceptionDir,old,"TEST",data);
 				        	fail = true;
 				        } 
 				        executor.shutdownNow();

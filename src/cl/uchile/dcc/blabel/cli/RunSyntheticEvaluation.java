@@ -228,8 +228,8 @@ public class RunSyntheticEvaluation {
 				        	bnodeCount = leanBnodeCount;
 				        }
 			        } catch (Exception e) {
-			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
-			        	System.out.println("LEAN\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	LOG.warning(e.getClass().getName()+" "+e.getMessage());
+			        	System.out.println("LEAN\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName()+"\t"+e.getCause());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 			        	
 			        	fail = true; // skip to next class
 			        } 
@@ -255,8 +255,8 @@ public class RunSyntheticEvaluation {
 			            
 			            System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+clr.getBnodeCount()+"\t"+(System.currentTimeMillis()-b4)+"\t"+clr.getColourIterationCount()+"\t"+clr.getLeafCount());
 			        } catch (Exception e) {
-			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
-			        	System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
+			        	LOG.warning(e.getClass().getName()+" "+e.getMessage());
+			        	System.out.println("LABEL\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName()+"\t"+e.getCause());//+"\t"+gc.getTotalColourIterations()+"\t"+gc.getLeaves().countLeaves()+"\t"+gc.getLeaves().getAutomorphismGroup().countOrbits()+"\t"+gc.getLeaves().getAutomorphismGroup().maxOrbit());
 			        	
 			        	fail = true; // skip to next class
 			        } 
@@ -279,7 +279,7 @@ public class RunSyntheticEvaluation {
 			            
 			            String message = "TEST\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t";
 			            
-			            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty()){
+			            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty() && tfr.getLabellingHashCollisions().isEmpty() && tfr.getLeaningHashCollisions().isEmpty()){
 			            	// no explicit error found
 			            	// but possible that tests timed out
 			            	// or otherwise failed to run
@@ -295,6 +295,12 @@ public class RunSyntheticEvaluation {
 			            	if(!tfr.getMappingsFailures().isEmpty()){
 			            		message += "\tMAPPING_FAILURES\t"+tfr.getMappingsFailures();
 			            	}
+			            	if(!tfr.getLabellingHashCollisions().isEmpty()){
+			            		message += "\tLABELLING_COLLISIONS\t"+tfr.getLabellingHashCollisions();
+			            	}
+			            	if(!tfr.getLabellingHashCollisions().isEmpty()){
+			            		message += "\tLEANING_COLLISIONS\t"+tfr.getLeaningHashCollisions();
+			            	}
 			            	
 			            }
 			            if(!tfr.getLabellingExceptions().isEmpty() || !tfr.getLeaningExceptions().isEmpty()){
@@ -307,8 +313,8 @@ public class RunSyntheticEvaluation {
 			            
 			            System.out.println(message);
 			        } catch (Exception e) {
-			        	LOG.info(e.getClass().getName()+" "+e.getMessage());
-			        	System.out.println("TEST\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName());
+			        	LOG.warning(e.getClass().getName()+" "+e.getMessage());
+			        	System.out.println("TEST\t"+fn.getName()+"\t"+testClass.getKey()+"\t"+classInstance.getKey()+"\t"+data.size()+"\t"+bnodeCount+"\t"+(System.currentTimeMillis()-b4)+"\t"+(-1*timeout*1000)+"\t"+e.getClass().getSimpleName()+"\t"+e.getCause());
 			        	
 			        	fail = true; // skip to next class
 			        } 

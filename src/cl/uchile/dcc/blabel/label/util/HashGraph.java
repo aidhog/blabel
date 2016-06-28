@@ -30,6 +30,15 @@ public class HashGraph {
 	// the initial blank hash
 	private final HashCode blankHash;
 	
+//	// cache hashcode
+//	private int hashCode = 0;
+//	
+//	// cache graph hash until something updated
+//	private HashCode graphHash = null;
+//	
+//	// cache ground graph hash until something updated
+//	private HashCode groundGraphHash = null;
+	
 	/**
 	 * Create a blank HashGraph
 	 * @param hf The hashing function to be used
@@ -64,6 +73,8 @@ public class HashGraph {
 	 * @param triple
 	 */
 	public void addTriple(Node[] stmt){
+//		clearCachedObjects();
+		
 		if(stmt.length<3){
 			throw new IllegalArgumentException("Expecting triples not tuples of length "+stmt.length);
 		}
@@ -78,6 +89,19 @@ public class HashGraph {
 		data.add(triple);
 	}
 	
+//	/**
+//	 * Clear objects cached for efficiency when the
+//	 * object state changes.
+//	 * 
+//	 * Messy since state can be changed outside 
+//	 * but helps with runtimes.
+//	 */
+//	public void clearCachedObjects(){
+//		graphHash = null;
+////		hashCode = 0;
+//		groundGraphHash = null;
+//	}
+//	
 	/**
 	 * Produces a cheap copy of the graph, where immutable objects
 	 * (graph structure, static hashes, hash function) are copied by pointer, 
@@ -117,6 +141,8 @@ public class HashGraph {
 	private HashCode getOrCreateHashCode(Node n){
 		HashCode hc = getHash(n);
 		if(hc==null){
+//			clearCachedObjects();
+			
 			if(n instanceof BNode){
 				hc = blankHash;
 				dynamicHashes.put(n, hc);
@@ -144,18 +170,18 @@ public class HashGraph {
 				tup.add(getHash(n));
 			}
 			HashCode o = Hashing.combineOrdered(tup);
-			
+
 			tup.clear();
 			tup.add(o);
 			tup.add(b);
-			
-			b = Hashing.combineUnordered(tup); 
+
+			b = Hashing.combineUnordered(tup);
 		}
 		return b;
 	}
 	
 	/**
-	 * Hash all blank nodes with the mux and return the triples
+	 * Hash all blank nodes with the mux
 	 * @param mux
 	 * @return
 	 */
@@ -171,6 +197,7 @@ public class HashGraph {
 			HashCode comb = Hashing.combineOrdered(tup);
 			hg.getBlankNodeHashes().put(b, comb);
 		}
+//		hg.clearCachedObjects();
 	}
 	
 	public HashCode getGroundSubGraphHash(){
@@ -182,11 +209,11 @@ public class HashGraph {
 					tup.add(getHash(n));
 				}
 				HashCode o = Hashing.combineOrdered(tup);
-				
+
 				tup.clear();
 				tup.add(o);
 				tup.add(b);
-				
+
 				b = Hashing.combineUnordered(tup); 
 			}
 		}
@@ -195,10 +222,12 @@ public class HashGraph {
 	
 	public void updateBNodeHashes(HashMap<Node,HashCode> bnodeHashes){
 		dynamicHashes.putAll(bnodeHashes);
+//		clearCachedObjects();
 	}
 	
 	public void setBNodeHashes(HashMap<Node,HashCode> bnodeHashes){
 		dynamicHashes = bnodeHashes;
+//		clearCachedObjects();
 	}
 	
 	public ArrayList<Node[]> getData(){
@@ -273,4 +302,63 @@ public class HashGraph {
 		
 		return pivotToGraph.values();
 	}
+	
+//	@Override
+//	public int hashCode() {
+//		if(hashCode==0){
+////			final int prime = 31;
+////			int result = 1;
+////			result = prime * result + ((blankHash == null) ? 0 : blankHash.hashCode());
+////			result = prime * result + ((data == null) ? 0 : data.hashCode());
+////			result = prime * result + ((dynamicHashes == null) ? 0 : dynamicHashes.hashCode());
+////			result = prime * result + hashCode;
+////			result = prime * result + ((hf == null) ? 0 : hf.hashCode());
+////			result = prime * result + ((staticHashes == null) ? 0 : staticHashes.hashCode());
+//			hashCode = getGraphHash().hashCode();
+//		}
+//		return hashCode;
+//	}
+//
+//	@Override
+//	/**
+//	 * The equals method is modulo isomorphism and thus must be used with care.
+//	 * In fact, this is a bit of a hack and could lead to collisions, but it 
+//	 * is better than just relying on getGraphHash(), which it seems will collide
+//	 * more often than it should. :(
+//	 * 
+//	 * This is used in GraphLabelling to detect isomorphic graphs
+//	 * 
+//	 * Two HashGraphs are considered equals if the graph hashes are equal, the
+//	 * data sizes are equal, the number of blank nodes is equal, and the static
+//	 * hash objects (their contents) are equal
+//	 */
+//	public boolean equals(Object obj) {
+//		if (this == obj)
+//			return true;
+//		if (obj == null)
+//			return false;
+//		if (getClass() != obj.getClass())
+//			return false;
+//		HashGraph other = (HashGraph) obj;
+//		if(!other.getGraphHash().equals(getGraphHash()))
+//			return false;
+//		if (data == null) {
+//			if (other.data != null)
+//				return false;
+//		} else if (data.size() != other.data.size())
+//			return false;
+//		if (dynamicHashes == null) {
+//			if (other.dynamicHashes != null)
+//				return false;
+//		} else if (dynamicHashes.size() != other.dynamicHashes.size())
+//			return false;
+//		if (staticHashes == null) {
+//			if (other.staticHashes != null)
+//				return false;
+//		} else if (!staticHashes.equals(other.staticHashes))
+//			return false;
+//		return true;
+//	}
+	
+	
 }

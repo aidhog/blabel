@@ -251,10 +251,14 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return glr;
 	}
 
-	public static TreeSet<Node[]> mapData(Collection<Node[]> data, Map<BNode,Node> map){
+	public static TreeSet<Node[]> mapData(Collection<Node[]> data, Map<BNode,Node> map) throws InterruptedException{
 		TreeSet<Node[]> leanData = new TreeSet<Node[]>(NodeComparator.NC);
 		boolean identity = isIdentityMap(map);
 		for(Node[] triple:data){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			Node[] leanTriple = new Node[triple.length];
 			System.arraycopy(triple, 0, leanTriple, 0, triple.length);
 			if(!identity){
@@ -290,13 +294,17 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return n;
 	}
 
-	private void indexBNodeGraph() {
+	private void indexBNodeGraph() throws InterruptedException {
 		predCard = new Count<Node>();
 		posIndex = new HashMap<Node,Map<Node,Set<Node>>>();
 		psoIndex = new HashMap<Node,Map<Node,Set<Node>>>();
 		queryBnodes = new TreeSet<BNode>();
 		
 		for(Node[] triple:filteredData){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			if(triple[0] instanceof BNode && !fixedBnodes.contains(triple[0]) && triple[2] instanceof BNode && !fixedBnodes.contains(triple[2])){
 				bnodeData.add(triple);
 				queryBnodes.add((BNode)triple[0]);
@@ -309,7 +317,7 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		}
 	}
 	
-	private void filterTrivialNonLeanBnodes(Collection<Node[]> data){
+	private void filterTrivialNonLeanBnodes(Collection<Node[]> data) throws InterruptedException{
 		// this stores blank nodes that have the same edge set
 		// only necessary to compute the mapping
 		HashMap<BNode,TreeSet<BNode>> partition = new HashMap<BNode,TreeSet<BNode>>();
@@ -319,6 +327,10 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		HashMap<BNode,Node> map = new HashMap<BNode,Node>();
 		
 		for(BNode bnode:bnodes){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			TreeSet<BNode> part = partition.get(bnode);
 			if(part!=null){
 				// we already found a blank node with an
@@ -431,11 +443,16 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 	 * 
 	 * @param map
 	 * @return
+	 * @throws InterruptedException 
 	 */
-	private static HashMap<BNode,Node> transitiveClosure(HashMap<BNode,Node> map){
+	private static HashMap<BNode,Node> transitiveClosure(HashMap<BNode,Node> map) throws InterruptedException{
 		boolean changed;
 		int iters = 0;
 		do{
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			changed = false;
 			HashMap<BNode,Node> nextMap = new HashMap<BNode,Node>();
 			
@@ -465,13 +482,17 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return map;
 	}
 	
-	private void indexAllEdges(Collection<Node[]> data){
+	private void indexAllEdges(Collection<Node[]> data) throws InterruptedException{
 		nodeToAllEdges = new HashMap<Node,NodeEdges>();
 		anyEdgeToNodes = new HashMap<Edge,TreeSet<NodeEdges>>();
 		
 		bnodes = new TreeSet<BNode>();
 
 		for(Node[] triple:data){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			if(triple.length<3){
 				LOG.warning("Not a triple: "+Nodes.toN3(triple));
 			} else {
@@ -492,11 +513,15 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		}
 	}
 
-	private void indexGroundEdges(Collection<Node[]> data){
+	private void indexGroundEdges(Collection<Node[]> data) throws InterruptedException{
 		nodeToGroundEdges = new HashMap<Node,NodeEdges>();
 		groundEdgeToNodes = new HashMap<Edge,TreeSet<NodeEdges>>();
 		
 		for(Node[] triple: data){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			if(triple.length<3){
 				LOG.warning("Not a triple: "+Nodes.toN3(triple));
 			} else {
@@ -522,10 +547,14 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		}
 	}
 	
-	private void findGroundCandidates(){
+	private void findGroundCandidates() throws InterruptedException{
 		candidates = new HashMap<BNode,Set<Node>>();
 		
 		for(BNode bnode:bnodes){
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
+			
 			if(!fixedBnodes.contains(bnode)){
 				NodeEdges edges = nodeToGroundEdges.get(bnode);
 				if(edges!=null){
@@ -1030,22 +1059,4 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 			this.solCount = solCount;
 		}
 	}
-	
-//	public static void main(String[] args) throws Exception{
-//		TreeSet<String> a = new TreeSet<String>();
-////		a.add("a");
-//		a.add("f");
-////		a.add("d");
-//		a.add("a");
-//		TreeSet<String> b = new TreeSet<String>();
-//		b.add("e");
-//		b.add("k");
-//		b.add("d");
-//		b.add("f");
-//		b.add("b");
-//		
-//		ArrayList<TreeSet<String>> diff = diff(b,a);
-//		
-//		System.err.println(diff);
-//	}
 }
