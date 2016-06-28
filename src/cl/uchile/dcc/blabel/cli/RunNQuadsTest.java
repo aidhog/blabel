@@ -382,7 +382,7 @@ public class RunNQuadsTest {
 				            
 				            String message = "TEST\t"+old+"\t"+data.size()+"\t"+bnodeCount+"\t"+runtime+"\t";
 				            
-				            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningExceptions().size()<=1 && tfr.getMappingsFailures().isEmpty() && tfr.getLabellingHashCollisions().isEmpty() && tfr.getLeaningHashCollisions().isEmpty()){
+				            if(tfr.getLabellingComparisons().size()<=1 && tfr.getLeaningComparisons().size()<=1 && tfr.getMappingsFailures().isEmpty() && tfr.getLabellingHashCollisions().isEmpty() && tfr.getLeaningHashCollisions().isEmpty()){
 				            	// no explicit error found
 				            	// but possible that tests timed out
 				            	// or otherwise failed to run
