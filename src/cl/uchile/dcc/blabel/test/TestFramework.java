@@ -504,9 +504,9 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 	
 	public static void main(String[] args) throws Exception{
 //		String dir = "data/tf/grid-2-25/";
-		String dir = "data/tf/grid-2-25/";
+		String dir = "data/btc-err/local/";
 		
-		BufferedReader br = new BufferedReader(new FileReader("data/grid-2-25.nt"));
+		BufferedReader br = new BufferedReader(new FileReader("data/btc-err/lean/input_shuffle_0.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/square.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/saramandai.nq"));
@@ -538,12 +538,14 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 		if(tfr.labellingComparisons.size()>1){
 			System.err.println("Labelling partitions: "+tfr.labellingComparisons.values());
 		}
+		System.err.println("Labelling collisions: "+tfr.labellingHashCollisions);
 		
 		System.err.println("Leaning exceptions "+tfr.leaningExceptions);
 		System.err.println("Leaning partition sizes "+tfr.leaningComparisons.size());
 		if(tfr.leaningComparisons.size()>1){
 			System.err.println("Leaning partitions: "+tfr.leaningComparisons.values());
 		}
+		System.err.println("Leaning collisions: "+tfr.labellingHashCollisions);
 		System.err.println("Mapping exceptions "+tfr.mappingsFailures);
 		
 	}
