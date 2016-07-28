@@ -314,7 +314,7 @@ public class DFSGraphLeaning extends GraphLeaning{
 			// return the object state to where it was
 			for(int i=0; i<bindings.getOutput().size(); i++){
 				partialSol.remove(bindings.getOutput().get(i));
-				timesBound.replace(bind[i],timesBound.get(bind[i])-1);
+				timesBound.put(bind[i],timesBound.get(bind[i])-1);
 			}
 		}
 			
