@@ -274,52 +274,52 @@ public class AnalyseNQuadsResults {
 
 		br.close();
 
-		System.out.println("Graphs with no bnodes "+nobnodeCount);
-		System.out.println("Largest graph "+maxTriplesDoc+" triples:"+maxTriples+" bnodes:"+maxTriplesBnodes);
-		System.out.println("Graph with most bnodes "+maxBnodesDoc+" triples:"+maxBnodesTriples+" bnodes:"+maxBnodes);
+		System.out.println("Graphs with no bnodes\t"+nobnodeCount);
+		System.out.println("Largest graph\t"+maxTriplesDoc+" triples:\t"+maxTriples+" bnodes:\t"+maxTriplesBnodes);
+		System.out.println("Graph with most bnodes \t"+maxBnodesDoc+" triples:\t"+maxBnodesTriples+" bnodes:\t"+maxBnodes);
 		System.out.println();
-		System.out.println("Graphs input for leaning "+leanCount);
-		System.out.println("Graphs failed for leaning "+leanErrorCount);
-		System.out.println("Graphs found to be non-lean "+nonLeanCount);
-		System.out.println("Total triples in input non-lean graphs "+leanNonLeanInputTriples);
-		System.out.println("Total blank nodes in input non-lean graphs "+leanNonLeanInputBnodes);
-		System.out.println("Total triples in output non-lean graphs "+leanNonLeanOutputTriples);
-		System.out.println("Total blank nodes in output non-lean graphs "+leanNonLeanOutputBnodes);
-		System.out.println("Total leaning error input triples "+totalLeanErrorTriples);
-		System.out.println("Total leaning error input blank nodes "+totalLeanErrorBnodes);
-		System.out.println("Total leaning non-error input triples "+totalLeanInputTriples);
-		System.out.println("Total leaning non-error input blank nodes "+totalLeanInputBnodes);
-		System.out.println("Total leaning non-error output triples "+totalLeanOutputTriples);
-		System.out.println("Total leaning non-error output blank nodes "+totalLeanOutputBnodes);
+		System.out.println("Graphs input for leaning\t"+leanCount);
+		System.out.println("Graphs failed for leaning\t"+leanErrorCount);
+		System.out.println("Graphs found to be non-lean\t"+nonLeanCount);
+		System.out.println("Total triples in input non-lean graphs\t"+leanNonLeanInputTriples);
+		System.out.println("Total blank nodes in input non-lean graphs\t"+leanNonLeanInputBnodes);
+		System.out.println("Total triples in output non-lean graphs\t"+leanNonLeanOutputTriples);
+		System.out.println("Total blank nodes in output non-lean graphs\t"+leanNonLeanOutputBnodes);
+		System.out.println("Total leaning error input triples\t"+totalLeanErrorTriples);
+		System.out.println("Total leaning error input blank nodes\t"+totalLeanErrorBnodes);
+		System.out.println("Total leaning non-error input triples\t"+totalLeanInputTriples);
+		System.out.println("Total leaning non-error input blank nodes\t"+totalLeanInputBnodes);
+		System.out.println("Total leaning non-error output triples\t"+totalLeanOutputTriples);
+		System.out.println("Total leaning non-error output blank nodes\t"+totalLeanOutputBnodes);
 
-		System.out.println("Most leaned graph (per triples) "+maxLeanedTriplesDoc+" input triples:"+maxLeanedTriplesIn+" output triples:"+maxLeanedTriplesOut+" input bnodes:"+maxLeanedTriplesBnodesIn+" output bnodes:"+maxLeanedTriplesBnodesOut);
-		System.out.println("Most leaned graph (per bnodes) "+maxLeanedBnodesDoc+" input triples:"+maxLeanedBnodesTriplesIn+" output triples:"+maxLeanedBnodesTriplesOut+" input bnodes:"+maxLeanedBnodesIn+" output bnodes:"+maxLeanedBnodesOut);
+		System.out.println("Most leaned graph (per triples)\t"+maxLeanedTriplesDoc+" input triples:\t"+maxLeanedTriplesIn+" output triples:\t"+maxLeanedTriplesOut+" input bnodes:\t"+maxLeanedTriplesBnodesIn+" output bnodes:\t"+maxLeanedTriplesBnodesOut);
+		System.out.println("Most leaned graph (per bnodes)\t"+maxLeanedBnodesDoc+" input triples:\t"+maxLeanedBnodesTriplesIn+" output triples:\t"+maxLeanedBnodesTriplesOut+" input bnodes:\t"+maxLeanedBnodesIn+" output bnodes:\t"+maxLeanedBnodesOut);
 
-		System.out.println("Total leaning time "+(errorLeanTime+noErrorLeanTime));
-		System.out.println("Non-error leaning time "+(noErrorLeanTime));
-		System.out.println("Error leaning time "+(errorLeanTime));
-		System.out.println("Leaning runtime bins");
+		System.out.println("Total leaning time:\t"+(errorLeanTime+noErrorLeanTime));
+		System.out.println("Non-error leaning time:\t"+(noErrorLeanTime));
+		System.out.println("Error leaning time:\t"+(errorLeanTime));
+		System.out.println("Leaning runtime bins:");
 		System.out.println(leanTimeBins.toString());
-		System.out.println("Leaning error counts");
+		System.out.println("Leaning error counts:");
 		exceptionTypeLean.printOrderedStats();
 		System.out.println();
 
-		System.out.println("Graphs input for labelling "+labelCount);
-		System.out.println("Graphs failed for labelling "+labelErrorCount);
-		System.out.println("Total labelling time "+(errorLabelTime+noErrorLabelTime));
-		System.out.println("Non-error labelling time "+(noErrorLabelTime));
-		System.out.println("Error labelling time "+(errorLabelTime));
-		System.out.println("Total labelling error input triples "+totalLabelErrorTriples);
-		System.out.println("Total labelling error input blank nodes "+totalLabelErrorBnodes);
-		System.out.println("Total labelling non-error input triples "+totalLabelInputTriples);
-		System.out.println("Total labelling non-error input blank nodes "+totalLabelInputBnodes);
-		System.out.println("Labelling runtime bins");
+		System.out.println("Graphs input for labelling:\t"+labelCount);
+		System.out.println("Graphs failed for labelling:\t"+labelErrorCount);
+		System.out.println("Total labelling time:\t"+(errorLabelTime+noErrorLabelTime));
+		System.out.println("Non-error labelling time:\t"+(noErrorLabelTime));
+		System.out.println("Error labelling time:\t"+(errorLabelTime));
+		System.out.println("Total labelling error input triples:\t"+totalLabelErrorTriples);
+		System.out.println("Total labelling error input blank nodes:\t"+totalLabelErrorBnodes);
+		System.out.println("Total labelling non-error input triples:\t"+totalLabelInputTriples);
+		System.out.println("Total labelling non-error input blank nodes:\t"+totalLabelInputBnodes);
+		System.out.println("Labelling runtime bins:");
 		System.out.println(labelTimeBins.toString());
-		System.out.println("Labelling error counts");
+		System.out.println("Labelling error counts:");
 		exceptionTypeLabel.printOrderedStats();
 		System.out.println();
 		
-		System.out.println("Combined runtime bins");
+		System.out.println("Combined runtime bins:");
 		System.out.println(combinedTimeBins.toString());
 
 		log.info("Finished in "+(System.currentTimeMillis()-b4));
