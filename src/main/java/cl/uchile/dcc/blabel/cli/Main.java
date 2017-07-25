@@ -26,7 +26,9 @@ public class Main {
 				sb.append("\n\t"+RunNQuadsTest.class.getSimpleName()+": [Testing] Compute the canonical graphs in a quads file");
 				sb.append("\n\t"+Control.class.getSimpleName()+": [Testing] Run a control experiment to time parsing a quads file");
 				sb.append("\n\t"+RunSyntheticEvaluation.class.getSimpleName()+": [Testing] Run synthetic benchmark");
-				
+				/** TODO: Provide documentation for the CLI */
+				sb.append("\n\t"+AnalyseNQuadsResults.class.getSimpleName()+": [Testing] ");
+				sb.append("\n\t"+UndirectedGraphToRDF.class.getSimpleName()+": [Testing] ");
 				
 				usage(sb.toString());
 			}
