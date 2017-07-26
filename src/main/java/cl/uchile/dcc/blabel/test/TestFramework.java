@@ -29,7 +29,7 @@ import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.NodeComparator;
 import org.semanticweb.yars.nx.parser.NxParser;
 
-import com.sun.istack.internal.logging.Logger;
+import java.util.logging.Logger;
 
 import cl.uchile.dcc.blabel.cli.RunNQuadsTest;
 import cl.uchile.dcc.blabel.label.GraphColouring;
@@ -45,7 +45,7 @@ import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkArgs.SaveLevel;
 import cl.uchile.dcc.blabel.test.TestFramework.TestFrameworkResult;
 
 public class TestFramework implements Callable<TestFrameworkResult> {
-	static final Logger LOG = Logger.getLogger(TestFramework.class);
+	static final Logger LOG = Logger.getLogger(TestFramework.class.getName());
 	
 	private final TestFrameworkArgs tfa; 
 	
@@ -506,6 +506,9 @@ public class TestFramework implements Callable<TestFrameworkResult> {
 //		String dir = "data/tf/grid-2-25/";
 		String dir = "data/btc-err/local/";
 		
+		// TODO: Provide testing data into the Git repository
+		// TODO: Convert into a JUnit test case
+
 		BufferedReader br = new BufferedReader(new FileReader("data/btc-err/lean/input_shuffle_0.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/grid.nt"));
 //		BufferedReader br = new BufferedReader(new FileReader("data/square.nt"));
