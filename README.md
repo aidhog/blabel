@@ -26,4 +26,4 @@ $ java -jar blabel-0.2.0-SNAPSHOT-jar-with-dependencies.jar
 </dependency>
 ````
 
-See the wiki for more details: https://github.com/aidhog/blabel/wiki
+See the following page for more details: http://blabel.github.io/
