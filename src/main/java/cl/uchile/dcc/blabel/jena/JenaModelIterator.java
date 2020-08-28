@@ -4,20 +4,20 @@ package cl.uchile.dcc.blabel.jena;
 //import java.util.Iterator;
 //import java.util.NoSuchElementException;
 //
+//import org.apache.jena.graph.Node_Blank;
+//import org.apache.jena.graph.Node_Literal;
+//import org.apache.jena.graph.Node_URI;
+//import org.apache.jena.rdf.model.Model;
+//import org.apache.jena.rdf.model.ModelFactory;
+//import org.apache.jena.rdf.model.Statement;
+//import org.apache.jena.rdf.model.StmtIterator;
+//import org.apache.jena.rdf.model.VCARD;
+//
 //import org.semanticweb.yars.nx.BNode;
 //import org.semanticweb.yars.nx.Literal;
 //import org.semanticweb.yars.nx.Node;
 //import org.semanticweb.yars.nx.Nodes;
 //import org.semanticweb.yars.nx.Resource;
-//
-//import com.hp.hpl.jena.graph.Node_Blank;
-//import com.hp.hpl.jena.graph.Node_Literal;
-//import com.hp.hpl.jena.graph.Node_URI;
-//import com.hp.hpl.jena.rdf.model.Model;
-//import com.hp.hpl.jena.rdf.model.ModelFactory;
-//import com.hp.hpl.jena.rdf.model.Statement;
-//import com.hp.hpl.jena.rdf.model.StmtIterator;
-//import com.hp.hpl.jena.vocabulary.VCARD;
 //
 ///**
 // * Provides a way to use Jena models as input to blabel.
@@ -63,7 +63,7 @@ package cl.uchile.dcc.blabel.jena;
 //	
 //	
 //	public org.semanticweb.yars.nx.Node jenaTermToNxParser(
-//			com.hp.hpl.jena.graph.Node jenaNode) {
+//			org.apache.jena.graph.Node jenaNode) {
 //		if (jenaNode instanceof Node_URI)
 //			return new Resource(jenaNode.getURI(), false);
 //		else if (jenaNode instanceof Node_Blank) {
@@ -78,15 +78,19 @@ package cl.uchile.dcc.blabel.jena;
 //			return BNode.createBNode(bNlabel);
 //		}
 //		else if (jenaNode instanceof Node_Literal) {
-//			return new Literal(jenaNode.getLiteralLexicalForm(),
-//					jenaNode.getLiteralLanguage() == null ? null : jenaNode
-//							.getLiteralLanguage().equals("") ? null : jenaNode
-//							.getLiteralLanguage(),
-//					jenaNode.getLiteralDatatypeURI() == null ? null : jenaNode
-//							.getLiteralDatatypeURI().equals("") ? null
-//							: new Resource(jenaNode.getLiteralDatatypeURI(),
-//									false));
-//		} else
+//		  String lang = jenaNode.getLiteralLanguage() == null ? null : 
+//						jenaNode.getLiteralLanguage().equals("") ? null : 
+//							jenaNode.getLiteralLanguage();
+//			
+//		  Resource datatype = null;
+//		  if(lang==null) {
+//			  datatype = jenaNode.getLiteralDatatypeURI() == null ? null : 
+//						jenaNode.getLiteralDatatypeURI().equals("") ? null : 
+//							new Resource(jenaNode.getLiteralDatatypeURI(),false);
+//		  }
+//		  return new Literal(jenaNode.getLiteralLexicalForm(),lang,datatype);
+//		} 
+//    else
 //			throw new UnsupportedOperationException("Unknown Jena node type "+jenaNode.getClass().getName());
 //
 //	}
