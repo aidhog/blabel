@@ -53,9 +53,9 @@ public class DFSGraphLeaning extends GraphLeaning{
 	 * @throws Exception 
 	 */
 	protected GraphLeaningResult getCore(ArrayList<Node[]> query, HashMap<BNode,Node> initialMap) throws InterruptedException {
-		HashMap<BNode,Node> homo = getHomomorphism(query, initialMap);
+		HashMap<BNode,Node> hom = getHomomorphism(query, initialMap);
 		GraphLeaningResult glr = null;
-		if(homo==null){
+		if(hom==null){
 			// graph is lean, we only have automorphisms
 			glr = new GraphLeaningResult(filteredData);
 			glr.depth = 1;
@@ -65,7 +65,7 @@ public class DFSGraphLeaning extends GraphLeaning{
 			
 			// map the data per the homomorphism we found
 			// and recurse on everything
-			TreeSet<Node[]> leanerData = mapData(filteredData,homo);
+			TreeSet<Node[]> leanerData = mapData(filteredData,hom);
 			DFSGraphLeaning gl = new DFSGraphLeaning(leanerData,randomiseBindings,prune);
 			
 			// single threaded for now
@@ -75,10 +75,10 @@ public class DFSGraphLeaning extends GraphLeaning{
 				// no need to merge
 				// (actually, this will probably never happen since higher
 				// level call always returns a core map, even if an automorphism)
-				glr.setCoreMap(homo);
+				glr.setCoreMap(hom);
 			} else {
 				// we (may) need to merge the two homomorphisms
-				glr.setCoreMap(merge(homo,glr.getCoreMap()));
+				glr.setCoreMap(merge(hom,glr.getCoreMap()));
 			}
 			
 		}
@@ -272,11 +272,11 @@ public class DFSGraphLeaning extends GraphLeaning{
 				// last pattern ... check to see if solution maps to
 				// same term twice or maps to ground term
 				HashSet<BNode> bnodes = getBNodeBindings(partialSol); 
-				boolean homo = bnodes.size() < partialSol.size();
+				boolean hom = bnodes.size() < partialSol.size();
 				
 				// return first such homomorphism ... ordering should
 				// pick a good one! (hopefully)
-				if(homo) return partialSol;
+				if(hom) return partialSol;
 				
 				//otherwise we found an automorphism
 				if(prune){

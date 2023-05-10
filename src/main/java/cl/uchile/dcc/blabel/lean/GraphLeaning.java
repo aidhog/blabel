@@ -280,9 +280,9 @@ public abstract class GraphLeaning implements Callable<GraphLeaningResult>{
 		return true;
 	}
 
-	private static Node getMappedNode(Node n, Map<BNode,Node> homo){
+	private static Node getMappedNode(Node n, Map<BNode,Node> hom){
 		if(n instanceof BNode){
-			Node m = homo.get((BNode)n);
+			Node m = hom.get((BNode)n);
 			if(m==null){
 				// an unconnected blank node
 				// we will deal with this at
