@@ -61,7 +61,7 @@ time elapsed 17 ms
 To skolemize a file `input.nt` into a file `output.nt`, using a prefix `https://example.com/.well-known/genid/` and the SHA256 hashing algorithm:
 
 ```sh
-java -jar blabel/target/blabel-0.2.0-SNAPSHOT-jar-with-dependencies.jar LabelRDFGraph \
+java -jar target/blabel-0.2.0-SNAPSHOT-jar-with-dependencies.jar LabelRDFGraph \
    -i input.nt -s 3 -p 'https://example.com/.well-known/genid/' -o output.nt
 ```
 
